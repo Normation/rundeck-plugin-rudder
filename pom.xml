@@ -21,7 +21,24 @@
   </licenses>
   <properties>
     <plugin.release.version>2.5.3</plugin.release.version>
-  </properties>
+    <logback-version>1.1.2</logback-version>
+    <scala-binary-version>2.11</scala-binary-version>
+    <jodatime-version>2.3</jodatime-version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <specs2-version>2.3.12</specs2-version>
+    <commons-codec-version>1.9</commons-codec-version>
+    <jodaconvert-version>1.6</jodaconvert-version>
+    <commons-lang-version>2.6</commons-lang-version>
+    <lift-version>2.5.2</lift-version>
+    <jgit-version>3.4.1.201406201815-r</jgit-version>
+    <slf4j-version>1.7.7</slf4j-version>
+    <scala-maven-plugin-version>3.2.1</scala-maven-plugin-version>
+    <scala-version>2.11.7</scala-version>
+    <commons-io-version>2.4</commons-io-version>
+    <rudder-version>3.1.2-SNAPSHOT</rudder-version>
+    <cglib-version>3.1</cglib-version>
+    <junit-version>4.11</junit-version>
+  </properties>  
   <build>
     <plugins>
       <plugin>
@@ -32,6 +49,39 @@
           <target>1.6</target>
         </configuration>
       </plugin>
+       <plugin>
+        <groupId>net.alchim31.maven</groupId>
+        <artifactId>scala-maven-plugin</artifactId>
+        <version>${scala-maven-plugin-version}</version>
+        <executions>
+          <execution>
+            <id>scala-compile-first</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>add-source</goal>
+              <goal>compile</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>scala-test-compile</id>
+            <phase>process-test-resources</phase>
+            <goals>
+              <goal>testCompile</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <scalaCompatVersion>${scala-binary-version}</scalaCompatVersion>
+          <args>
+            <arg>-target:jvm-1.7</arg>
+            <arg>-dependencyfile</arg>
+            <arg>${basedir}/.scala_dependencies</arg>
+          </args>
+          <jvmArgs>
+            <jvmArg>-server</jvmArg>
+          </jvmArgs>
+        </configuration>
+      </plugin>      
       <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
         <version>2.2.2</version>
@@ -65,8 +115,70 @@
         <version>${plugin.release.version}</version>
       </plugin>
     </plugins>
-  </build>
+    <pluginManagement>
+    <plugins>
+      <plugin>
+        <groupId>org.eclipse.m2e</groupId>
+        <artifactId>lifecycle-mapping</artifactId>
+        <version>1.0.0</version>
+        <configuration>
+          <lifecycleMappingMetadata>
+            <pluginExecutions>
+              <pluginExecution>
+                <pluginExecutionFilter>
+                  <groupId>org.zeroturnaround</groupId>
+                  <artifactId>jrebel-maven-plugin</artifactId>
+                  <versionRange>[0.1,)</versionRange>
+                  <goals>
+                    <goal>generate</goal>
+                  </goals>
+                </pluginExecutionFilter>
+                <action>
+                  <execute/>
+                </action>
+              </pluginExecution>
+              <pluginExecution>
+                <pluginExecutionFilter>
+                  <groupId>net.alchim31.maven</groupId>
+                  <artifactId>scala-maven-plugin</artifactId>
+                  <versionRange>[0.1,)</versionRange>
+                  <goals>
+                    <goal>add-source</goal>
+                    <goal>compile</goal>
+                    <goal>testCompile</goal>              
+                  </goals>
+                </pluginExecutionFilter>
+                <action>
+                  <configurator>
+                    <id>org.maven.ide.eclipse.scala</id>
+                  </configurator>                  
+                </action>
+              </pluginExecution>
+            </pluginExecutions>
+          </lifecycleMappingMetadata>
+        </configuration>
+      </plugin>
+    </plugins>
+    </pluginManagement>
+    </build>
   <dependencies>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.5</version>
+    </dependency>  
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>2.10.4</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.typesafe</groupId>
+      <artifactId>config</artifactId>
+      <version>1.2.1</version>
+      <scope>compile</scope>
+    </dependency>  
     <dependency>
       <groupId>org.rundeck</groupId>
       <artifactId>rundeck-core</artifactId>
@@ -79,5 +191,15 @@
       <version>1.6.3</version>
       <scope>compile</scope>
     </dependency>
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk-ec2</artifactId>
+      <version>1.9.0</version>
+    </dependency>
+    <dependency>
+      <groupId>org.json4s</groupId>
+      <artifactId>json4s-native_${scala-binary-version}</artifactId>
+      <version>3.2.11</version>
+    </dependency>    
   </dependencies>
 </project>
