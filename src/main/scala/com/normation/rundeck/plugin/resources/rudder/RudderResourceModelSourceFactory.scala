@@ -17,13 +17,13 @@
 package com.normation.rundeck.plugin.resources.rudder;
 
 import java.util.Properties
-
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
 import com.dtolabs.rundeck.core.plugins.configuration.Describable
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
+import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
 
 
 /**
@@ -35,7 +35,10 @@ import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
 @Plugin(name = "rudder", service = "ResourceModelSource")
 class RudderResourceModelSourceFactory(framework: Framework) extends ResourceModelSourceFactory with Describable {
   override def createResourceModelSource(properties: Properties) = {
-    new EC2ResourceModelSource(properties)
+    RudderResourceModelSource.fromProperties(properties) match {
+      case Left(ErrorMsg(msg, optex)) => throw new ConfigurationException(msg)
+      case Right(x) => x
+    }
   }
 
   override def getDescription() = {
