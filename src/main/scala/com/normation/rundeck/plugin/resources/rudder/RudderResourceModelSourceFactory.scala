@@ -17,26 +17,30 @@
 package com.normation.rundeck.plugin.resources.rudder;
 
 import java.util.Properties
+
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
+import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
 import com.dtolabs.rundeck.core.plugins.configuration.Describable
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
-import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
 
 
 /**
  * This file provides the property description that will be showed to the
  * user in the plugin details page.
  */
-
-
 @Plugin(name = "rudder", service = "ResourceModelSource")
-class RudderResourceModelSourceFactory(framework: Framework) extends ResourceModelSourceFactory with Describable {
+class RudderResourceModelSourceFactory(framework: Framework) extends ResourceModelSourceFactory with Describable with Loggable {
   override def createResourceModelSource(properties: Properties) = {
     RudderResourceModelSource.fromProperties(properties) match {
-      case Left(ErrorMsg(msg, optex)) => throw new ConfigurationException(msg)
+      case Left(ErrorMsg(msg, optex)) =>
+        optex match {
+          case Some(ex: Exception) => throw new ConfigurationException(msg, ex)
+          case _                   => throw new ConfigurationException(msg)
+        }
+
       case Right(x) => x
     }
   }
@@ -46,6 +50,9 @@ class RudderResourceModelSourceFactory(framework: Framework) extends ResourceMod
   }
 }
 
+/**
+ * Here come the actual description of the Rudder plugin properties
+ */
 object RudderResourceModelSourceFactory {
 
   val PROVIDER_NAME = "rudder"
@@ -66,8 +73,8 @@ object RudderResourceModelSourceFactory {
     .title("Rudder Resources")
     .description("Produces nodes from Rudder")
 
-    .property(PropertyUtil.string(RUDDER_API_ENDPOINT, "Rudder API URL",
-        "The URL to access you Rudder API, for ex.: 'https://my.company.com/rudder/api'", true, null))
+    .property(PropertyUtil.string(RUDDER_API_ENDPOINT, "Rudder base URL",
+        "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
     .property(PropertyUtil.string(API_TOKEN, "API TOKEN",
         "The API token to use for rundeck, defined in Rudder API administration page", true, null))
     .property(PropertyUtil.integer(REFRESH_INTERVAL, "Refresh Interval",

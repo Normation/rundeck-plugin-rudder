@@ -171,11 +171,35 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>commons-httpclient</groupId>
-      <artifactId>commons-httpclient</artifactId>
-      <version>3.0.1</version>
-      <scope>provided</scope>
-    </dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-core_${scala-binary-version}</artifactId>
+      <version>1.0.0</version>
+    </dependency>   
+    <dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-io_${scala-binary-version}</artifactId>
+      <version>0.10.0</version>
+    </dependency>   
+    <dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-uri_${scala-binary-version}</artifactId>
+      <version>1.0.0</version>
+    </dependency>   
+    <dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-net_${scala-binary-version}</artifactId>
+      <version>0.10.0</version>
+    </dependency>   
+    <dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-json_${scala-binary-version}</artifactId>
+      <version>1.0.0</version>
+    </dependency>   
+    <dependency>
+      <groupId>com.propensive</groupId>
+      <artifactId>rapture-json-jackson_${scala-binary-version}</artifactId>
+      <version>1.0.0</version>
+    </dependency>   
 <!--     <dependency> -->
 <!--       <groupId>org.apache.httpcomponents</groupId> -->
 <!--       <artifactId>httpclient</artifactId> -->

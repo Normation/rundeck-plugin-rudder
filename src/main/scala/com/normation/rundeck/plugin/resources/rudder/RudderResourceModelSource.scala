@@ -17,52 +17,17 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import java.util.Properties
-
-import scala.Left
-import scala.Right
-
-import com.dtolabs.rundeck.core.common.INodeSet
-import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.resources.ResourceModelSource
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceException
+import com.dtolabs.rundeck.core.common.INodeSet
+import com.dtolabs.rundeck.core.common.NodeSetImpl
 
-import org.apache.log4j.Logger
+import rapture._
+import core._, io._, net._, uri._, json._, codec._
 
-//import org.apache.commons._
-//import org.apache.http._
-//import org.apache.http.client._
-//import org.apache.http.client.methods.HttpPost
-//import org.apache.http.impl.client.DefaultHttpClient
-//import org.apache.http.message.BasicNameValuePair
-//import org.apache.http.client.entity.UrlEncodedFormEntity
-//object HttpPostTester {
-//
-//  def main(args: Array[String]) {
-//
-//    val url = "http://localhost:8080/posttest";
-//
-//    val post = new HttpPost(url)
-//    post.addHeader("appid","YahooDemo")
-//    post.addHeader("query","umbrella")
-//    post.addHeader("results","10")
-//
-//    val client = new DefaultHttpClient
-//    val params = client.getParams
-//    params.setParameter("foo", "bar")
-//
-//    val nameValuePairs = new ArrayList[NameValuePair](1)
-//    nameValuePairs.add(new BasicNameValuePair("registrationid", "123456789"));
-//    nameValuePairs.add(new BasicNameValuePair("accountType", "GOOGLE"));
-//    post.setEntity(new UrlEncodedFormEntity(nameValuePairs));
-//
-//    // send the post request
-//    val response = client.execute(post)
-//    println("--- HEADERS ---")
-//    response.getAllHeaders.foreach(arg => println(arg))
-//
-//  }
-//
-//}
+import encodings.`UTF-8`
+import jsonBackends.jackson._
+import timeSystems.numeric
 
 //Rudder node ID, used as key to synchro nodes
 final case class NodeId(value: String)
@@ -72,48 +37,67 @@ final case class RefreshInterval(secondes: Int) {
 }
 
 //Result of a parsed nodes
-final case class Node(
-    id: NodeId
-  , nodename: String
-  , hostname: String
-  , description: String
-  , osFamily: String
-  , osName: String
-  , osArch: String
-  , osVersion: String
-  , remoteUrl: String
+final case class Node( //hooo, the nice strings!
+    id             : NodeId
+  , nodename       : String
+  , hostname       : String
+  , description    : String
+  , osFamily       : String
+  , osName         : String
+  , osArch         : String
+  , osVersion      : String
+  , remoteUrl      : String
   , rudderGroupTags: List[GroupId]
 )
 
-//Rudder base API url, for ex: https://my.company.com/rudder/api/
-final case class APIUrl(baseUrl: String) {
+final case class Group(
+    id     : GroupId
+  , name   : String
+  , nodeIds: Set[NodeId]
+  , enable : Boolean
+  , dynamic: Boolean
+)
 
+//Rudder base URL, for ex: https://my.company.com/rudder/
+final case class RudderUrl(baseUrl: String) {
+
+  /*
+   * We are only compatible with API v6 and above
+   * Before v6, we can't have information on all nodes in
+   * one request.
+   */
+  private[this] val v = "6"
   private[this] val url = if(baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.size - 1) else baseUrl
 
   //utility method
-  def nodesUrl = s"${url}/latest/nodes"
-  def nodeUrl(id: NodeId) = nodesUrl + "/" + id.value
+  def nodesApi = s"${url}/api/${v}/nodes"
+  def nodeApi(id: NodeId) = nodesApi + "/" + id.value
+  def nodeUrl(id: NodeId) =  s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
 
-  def groupsUrl = s"${url}/latest/groupes"
-  def groupUrl(id: GroupId) = groupsUrl + "/" + id.value
+  def groupsApi = s"${url}/api/${v}/groups"
+  def groupApi(id: GroupId) = groupsApi + "/" + id.value
 }
 
 //of course, non value can be null
 final case class Configuration(
-    apiUrl: APIUrl
+    url: RudderUrl
   , apiToken: String
   , rundeckUser: String
   , refreshInterval: RefreshInterval //time in ms, should never be < 5000ms
+
+  //add checkSSL certificate
+  //rundeck user name from properties
+  //ssl port from properties
+
 )
 
-final case class ErrorMsg(value: String, exception: Option[Throwable] = None)
+
 
 object RudderResourceModelSource {
 
-  def fromProperties(prop: Properties): Either[ErrorMsg, RudderResourceModelSource] = {
-
-import RudderResourceModelSourceFactory._
-    def getProp(key: String): Either[ErrorMsg, String] = {
+  def fromProperties(prop: Properties): Failable[RudderResourceModelSource] = {
+    import RudderResourceModelSourceFactory._
+    def getProp(key: String): Failable[String] = {
       prop.getProperty(key) match {
         case null  => Left(ErrorMsg(s"The property for key '${key}' was not found"))
         case value => Right(value)
@@ -134,11 +118,9 @@ import RudderResourceModelSourceFactory._
                    }
                  }.right
     } yield {
-      new RudderResourceModelSource(Configuration(APIUrl(url), token, user, refresh))
+      new RudderResourceModelSource(Configuration(RudderUrl(url), token, user, refresh))
     }
   }
-
-  val logger = Logger.getLogger(RudderResourceModelSource.getClass)
 
 }
 
@@ -151,12 +133,10 @@ import RudderResourceModelSourceFactory._
  */
 class RudderResourceModelSource(configuration: Configuration) extends ResourceModelSource {
 
-  val logger = Logger.getLogger(this.getClass)
-
-  //we are localy caching node instances.
+  //we are locally caching node instances.
   private[this] var nodes = Map[NodeId, Node]()
 
-  private[this] val mapping = new InstanceToNodeMapper(configuration.rundeckUser, configuration.apiUrl.nodeUrl)
+  private[this] val mapping = new InstanceToNodeMapper(configuration.rundeckUser, configuration.url.nodeUrl)
 
 
   @throws(classOf[ResourceModelSourceException])
@@ -181,21 +161,100 @@ class RudderResourceModelSource(configuration: Configuration) extends ResourceMo
         set
     }
   }
+
+  def queryNodes(): Failable[Seq[Node]] = {
+    val topic = "?include=" + List(
+        "environmentVariables" //to look for a specific user / port to use for rundeck
+      , "networkInterfaces" // not sure
+      , "storage" // not sure
+      , "os" // basic os information
+      , "properties" // rudder properties
+      , "processessors" // not sure
+      , "accounts" // not sure
+      , "ipAddresses" // not sure
+      , "fileSystems" //not sure
+    ).mkString(",")
+
+
+    val url = Http.parse(configuration.url.nodesApi)
+    val page = url.get(timeout = 5000L, ignoreInvalidCertificates = true, httpHeaders = Map("X-API-Token" -> configuration.apiToken)).slurp[Char]
+    val json = Json.parse(page)
+
+    if(json.result.as[String] == "success") {
+      Traverse(json.data.nodes.as[Seq[Json]]) { node =>
+       extractNode(node)
+      }
+    } else {
+      Left(ErrorMsg("Error when trying to get nodes: " + json.error.as[String]))
+    }
+
+  }
+
+  def queryGroups() : Failable[Seq[Group]] = {
+    val url = Http.parse(configuration.url.groupsApi)
+    val page = url.get(timeout = 5000L, ignoreInvalidCertificates = true, httpHeaders = Map("X-API-Token" -> configuration.apiToken)).slurp[Char]
+    val json = Json.parse(page)
+
+    if(json.result.as[String] == "success") {
+      Traverse(json.data.groups.as[Seq[Json]]) { group =>
+       extractGroup(group)
+      }
+    } else {
+      Left(ErrorMsg("Error when trying to get nodes: " + json.error.as[String]))
+    }
+  }
+
+  /**
+   * Extract a group from what should be a JSON for group.
+   */
+  private[this] def extractGroup(json: Json) = {
+    try {
+      Right(Group(
+          id = GroupId(json.id.as[String])
+        , name = json.displayName.as[String]
+        , nodeIds = json.nodeIds.as[Set[String]].map(NodeId(_))
+        , enable = json.isEnabled.as[Boolean]
+        , dynamic = json.isDynamic.as[Boolean]
+      ))
+    } catch {
+      case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))
+    }
+
+  }
+  private[this] def extractNode(json: Json) = {
+
+    try {
+
+      val id = NodeId(json.id.as[String])
+      Right(Node(
+          id = id
+        , nodename    = id.value
+        , hostname    = json.hostname.as[String]
+        , description = json.hostname.as[String] + " " + json.os.fullName.as[String]
+        , osFamily    = json.os.`type`.as[String]
+        , osName      = json.os.name.as[String]
+        , osArch      = json.architectureDescription.as[String]
+        , osVersion   = json.os.version.as[String]
+        , remoteUrl   = "plop"
+        , rudderGroupTags = List[GroupId]()
+      ))
+    } catch {
+      case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))
+    }
+  }
 }
 
-/**
- * Traverser of the poor, because no scalaz
- */
-object Traverse {
-  def apply[T,U](seq: Seq[T])(f: T => Either[ErrorMsg,U]): Either[ErrorMsg,Seq[U]] = {
+object MainTest {
+  def main(args: Array[String]): Unit = {
 
-    //that's clearly not the canonical way of doing it!
-    //(simplest way to avoid stack overflow)
+   val model = new RudderResourceModelSource(Configuration(RudderUrl("https://192.168.46.2/rudder"), "WHFMJwnOl9kxegoDOjUBB7xrunWLqdTe", "rundeck", RefreshInterval(30)))
+   val config = Configuration(RudderUrl("https://192.168.46.2/rudder"), "WHFMJwnOl9kxegoDOjUBB7xrunWLqdTe", "rundeck", RefreshInterval(30))
 
-    Right(seq.map { x => f(x) match {
-        case Right(y) => y
-        case Left(msg) => return Left(msg)
-    }})
+
+   println(model.queryNodes().fold(identity , x  => x.map( _.hostname)))
+   println(model.queryGroups().fold(identity , x  => x.map( _.name)))
+
+
   }
 }
 
