@@ -41,7 +41,9 @@ class RudderResourceModelSourceFactory(framework: Framework) extends ResourceMod
           case _                   => throw new ConfigurationException(msg)
         }
 
-      case Right(x) => x
+      case Right(x) =>
+        logger.info(s"Rudder ressource module initialized. Nodes will be fetch at URL ${x.configuration.url.nodesApi} with a refresh rate of ${x.configuration.refreshInterval.secondes}s")
+        x
     }
   }
 
@@ -60,6 +62,8 @@ object RudderResourceModelSourceFactory {
   val RUDDER_API_ENDPOINT = "rudderAPIUrl"
   val REFRESH_INTERVAL = "refreshInterval"
   val RUNDECK_USER = "rundeckUser"
+  val ENV_VARIABLE_RUNDECK_USER = "envVarRundeckUser"
+  val ENV_VARIABLE_SSL_PORT = "envVarSSLPort"
 
   //  TODO
 //  val GROUP_ID = "groupIds"
@@ -82,7 +86,12 @@ object RudderResourceModelSourceFactory {
     .property(PropertyUtil.string(RUNDECK_USER, "Rundeck user",
         "The user used by rundeck to connect to nodes", true, "rundeck"))
     .property(PropertyUtil.string(RUNDECK_USER, "Rundeck user",
-        "The user used by rundeck to connect to nodes", true, "rundeck"))
+        "The default user used by rundeck to connect to nodes", true, "rundeck"))
+    .property(PropertyUtil.string(ENV_VARIABLE_RUNDECK_USER, "Environment variable for rundeck user",
+        "If not empty, look for that environment variable on the node and use its value in place of default rundeck user configured above", false, null))
+    .property(PropertyUtil.string(ENV_VARIABLE_SSL_PORT, "Environment variable for ssl port",
+        "If not empty, look for that environment variable on the node and use its value in place of default SSL port", false, null))
+
 //    .property(PropertyUtil.string(GROUP_IDS, "Group IDs",
 //        "Only get nodes from the comma separated list of group UUID. Let empty to get all nodes. Invalid UUIDs will be ignored", false, null))
 

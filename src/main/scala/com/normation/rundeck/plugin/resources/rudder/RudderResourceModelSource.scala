@@ -24,45 +24,9 @@ import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 
-import rapture.core._
-import rapture.io._
-import rapture.net._
-import rapture.uri._
-import rapture.json._
-import rapture.codec._
-
-import encodings.`UTF-8`
-import jsonBackends.jackson._
-import timeSystems.numeric
-
 import scala.util.Left
 import org.apache.log4j.Logger
 
-//Rudder node ID, used as key to synchro nodes
-final case class NodeId(value: String)
-final case class GroupId(value: String)
-
-//Result of a parsed nodes
-final case class Node( //hooo, the nice strings!
-    id             : NodeId
-  , nodename       : String
-  , hostname       : String
-  , description    : String
-  , osFamily       : String
-  , osName         : String
-  , osArch         : String
-  , osVersion      : String
-  , remoteUrl      : String
-  , rudderGroupTags: List[GroupId]
-)
-
-final case class Group(
-    id     : GroupId
-  , name   : String
-  , nodeIds: Set[NodeId]
-  , enable : Boolean
-  , dynamic: Boolean
-)
 
 //Rudder base URL, for ex: https://my.company.com/rudder/
 final case class RudderUrl(baseUrl: String) {
@@ -98,10 +62,8 @@ final case class Configuration(
   , rundeckUser: String
   , refreshInterval: RefreshInterval //time in ms, should never be < 5000ms
 
-  //add checkSSL certificate
-  //rundeck user name from properties
-  //ssl port from properties
-
+  , envVarSSLPort: Option[String]
+  , envVarRundeckUser: Option[String]
 )
 
 
@@ -131,7 +93,10 @@ object RudderResourceModelSource {
                    }
                  }.right
     } yield {
-      new RudderResourceModelSource(Configuration(RudderUrl(url), token, user, refresh))
+      val envVarSSLPort = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
+      val envVarUser = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
+
+      new RudderResourceModelSource(Configuration(RudderUrl(url), token, user, refresh, envVarSSLPort, envVarUser))
     }
   }
 
@@ -144,20 +109,22 @@ object RudderResourceModelSource {
  * Here, we have mostly glue. The actual querying and mapping is done in
  * dedicated methods.
  */
-class RudderResourceModelSource(configuration: Configuration) extends ResourceModelSource {
+class RudderResourceModelSource(val configuration: Configuration) extends ResourceModelSource {
 
   //we are locally caching nodes and groups instances.
   private[this] var nodes  = Map[NodeId, Node]()
   private[this] var groups = Map[GroupId, Group]()
 
   //last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
-  private[this] var lastUPdateTime = 0L
+  private[this] var lastUpdateTime = 0L
 
-  private[this] val logger = Logger.getLogger(this.getClass)
+  private[this] val logger = Logger.getLogger("rudder")
 
   @throws(classOf[ResourceModelSourceException])
   def getNodes(): INodeSet = {
     //update nodes and groups if needed
+
+    logger.debug("Getting nodes from Rudder")
     updateNodesAndGroups()
 
     //just map nodes to
@@ -174,11 +141,12 @@ class RudderResourceModelSource(configuration: Configuration) extends ResourceMo
   //logging/managing errors
   def updateNodesAndGroups(): Unit = {
     val now = System.currentTimeMillis()
-    this.lastUPdateTime = now
 
-    if(this.lastUPdateTime + configuration.refreshInterval.ms < now) {
-      queryGroups() match {
+    if(this.lastUpdateTime + configuration.refreshInterval.ms < now) {
+      this.lastUpdateTime = now
+      RudderAPIQuery.queryGroups(configuration) match {
         case Right(res) =>
+          logger.debug(s"Found ${res.size} groups on Rudder server")
           this.groups = res.map { x => (x.id, x) }.toMap
         case Left(ErrorMsg(msg, optEx)) =>
           logger.error(s"Error when trying to update the groups from Rudder at url ${configuration.url.groupsApi}: ${msg}")
@@ -187,8 +155,9 @@ class RudderResourceModelSource(configuration: Configuration) extends ResourceMo
           }
       }
 
-      queryNodes() match {
+      RudderAPIQuery.queryNodes(configuration) match {
         case Right(res) =>
+          logger.debug(s"Found ${res.size} nodes on Rudder server")
           this.nodes= res.map { x => (x.id, x) }.toMap
         case Left(ErrorMsg(msg, optEx)) =>
           logger.error(s"Error when trying to update the nodes from Rudder at url ${configuration.url.nodesApi}: ${msg}")
@@ -220,119 +189,26 @@ class RudderResourceModelSource(configuration: Configuration) extends ResourceMo
     nodes.map { node =>
       val x = new NodeEntryImpl()
 
-      x.setNodename(node.nodename)
-      x.setNodename(node.hostname)
-      x.setDescription(node.description)
+      x.setNodename(node.hostname + " " + node.id.value)
+      x.setHostname(node.hostname+node.providedSSLPort.map(x => ":"+x).getOrElse(""))
+      x.setDescription(node.osFullName)
+      x.setOsName(node.osName)
       x.setOsFamily(node.osFamily)
       x.setOsArch(node.osArch)
       x.setOsVersion(node.osVersion)
-      x.setUsername(configuration.rundeckUser)
-      x.getAttributes().put("editUrl", node.remoteUrl)
-      x.getAttributes().put("groups", groupForNode(node.id).map( _.name).mkString(","))
+      x.setUsername(node.rundeckUser)
+      x.getAttributes().put("rudder_information:node direct URL", node.remoteUrl)
+      x.getAttributes().put("rudder_information:groups", groupForNode(node.id).map( _.name).mkString(","))
+      x.getAttributes().put("rudder_information:id", node.id.value)
+      x.getAttributes().put("rudder_information:policy_server_id", node.policyServerId)
+      x.getAttributes().put("rudder_general:ram", node.ram)
+      x.getAttributes().put("rudder_networks:ips", node.ipAddresses.mkString(", "))
       x
     }
   }
 
-
-
-  def queryNodes(): Failable[Seq[Node]] = {
-    val topic = "?include=" + List(
-        "environmentVariables" //to look for a specific user / port to use for rundeck
-      , "networkInterfaces" // not sure
-      , "storage" // not sure
-      , "os" // basic os information
-      , "properties" // rudder properties
-      , "processessors" // not sure
-      , "accounts" // not sure
-      , "ipAddresses" // not sure
-      , "fileSystems" //not sure
-    ).mkString(",")
-
-    try {
-      val url = Http.parse(configuration.url.nodesApi)
-      val page = url.get(timeout = 5000L, ignoreInvalidCertificates = true, httpHeaders = Map("X-API-Token" -> configuration.apiToken)).slurp[Char]
-      val json = Json.parse(page)
-
-      if(json.result.as[String] == "success") {
-        Traverse(json.data.nodes.as[Seq[Json]]) { node =>
-         extractNode(node)
-        }
-      } else {
-        Left(ErrorMsg("Error when trying to get nodes: " + json.error.as[String]))
-      }
-    } catch {
-      case ex: Exception => Left(ErrorMsg("Error when trying to get node", Some(ex)))
-    }
-  }
-
-  def queryGroups() : Failable[Seq[Group]] = {
-    try {
-      val url = Http.parse(configuration.url.groupsApi)
-      val page = url.get(timeout = 5000L, ignoreInvalidCertificates = true, httpHeaders = Map("X-API-Token" -> configuration.apiToken)).slurp[Char]
-      val json = Json.parse(page)
-
-      if(json.result.as[String] == "success") {
-        Traverse(json.data.groups.as[Seq[Json]]) { group =>
-         extractGroup(group)
-        }
-      } else {
-        Left(ErrorMsg("Error when trying to get nodes: " + json.error.as[String]))
-      }
-    } catch {
-      case ex: Exception => Left(ErrorMsg("Error when trying to get groups", Some(ex)))
-    }
-  }
-
-  /**
-   * Extract a group from what should be a JSON for group.
-   */
-  private[this] def extractGroup(json: Json) = {
-    try {
-      Right(Group(
-          id = GroupId(json.id.as[String])
-        , name = json.displayName.as[String]
-        , nodeIds = json.nodeIds.as[Set[String]].map(NodeId(_))
-        , enable = json.isEnabled.as[Boolean]
-        , dynamic = json.isDynamic.as[Boolean]
-      ))
-    } catch {
-      case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))
-    }
-
-  }
-
-  private[this] def extractNode(json: Json) = {
-    try {
-      val id = NodeId(json.id.as[String])
-      Right(Node(
-          id = id
-        , nodename    = id.value
-        , hostname    = json.hostname.as[String]
-        , description = json.hostname.as[String] + " " + json.os.fullName.as[String]
-        , osFamily    = json.os.`type`.as[String]
-        , osName      = json.os.name.as[String]
-        , osArch      = json.architectureDescription.as[String]
-        , osVersion   = json.os.version.as[String]
-        , remoteUrl   = "plop"
-        , rudderGroupTags = List[GroupId]()
-      ))
-    } catch {
-      case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))
-    }
-  }
 }
 
-object MainTest {
-  def main(args: Array[String]): Unit = {
 
-   val model = new RudderResourceModelSource(Configuration(RudderUrl("https://192.168.46.2/rudder"), "WHFMJwnOl9kxegoDOjUBB7xrunWLqdTe", "rundeck", RefreshInterval(30)))
-
-
-   println(model.queryNodes().fold(identity , x  => x.map( _.hostname)))
-   println(model.queryGroups().fold(identity , x  => x.map( _.name)))
-
-
-  }
-}
 
 

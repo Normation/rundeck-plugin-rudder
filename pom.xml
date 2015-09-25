@@ -24,8 +24,8 @@
 
     <logback-version>1.1.2</logback-version>
     <scala-maven-plugin-version>3.2.1</scala-maven-plugin-version>
-    <scala-binary-version>2.11</scala-binary-version>
-    <scala-version>${scala-binary-version}.7</scala-version>
+    <sbv>2.11</sbv>
+    <scala-version>${sbv}.7</scala-version>
     <jodatime-version>2.3</jodatime-version>
     <specs2-version>2.3.12</specs2-version>
     <commons-codec-version>1.9</commons-codec-version>
@@ -67,7 +67,7 @@
           </execution>
         </executions>
         <configuration>
-          <scalaCompatVersion>${scala-binary-version}</scalaCompatVersion>
+          <scalaCompatVersion>${sbv}</scalaCompatVersion>
           <args>
             <arg>-target:jvm-1.7</arg>
             <arg>-dependencyfile</arg>
@@ -101,7 +101,7 @@
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-               <Rundeck-Plugin-Libs>lib/scala-library-${scala-version}.jar <!--lib/httpclient-4.2.1.jar--></Rundeck-Plugin-Libs> 
+              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl lib/rapture-core_${sbv} lib/rapture-codec_${sbv} lib/rapture-cryto_${sbv} lib/rapture-data_${sbv} lib/rapture-io_${sbv} lib/rapture-json_${sbv} lib/rapture-json-jackson_${sbv} lib/rapture-mime_${sbv} lib/rapture-net_${sbv} lib/rapture-uri_${sbv}</Rundeck-Plugin-Libs> 
             </manifestEntries>
           </archive>
         </configuration>
@@ -172,32 +172,32 @@
     </dependency>
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-core_${scala-binary-version}</artifactId>
+      <artifactId>rapture-core_${sbv}</artifactId>
       <version>1.0.0</version>
     </dependency>   
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-io_${scala-binary-version}</artifactId>
+      <artifactId>rapture-io_${sbv}</artifactId>
       <version>0.10.0</version>
     </dependency>   
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-uri_${scala-binary-version}</artifactId>
+      <artifactId>rapture-uri_${sbv}</artifactId>
       <version>1.0.0</version>
     </dependency>   
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-net_${scala-binary-version}</artifactId>
+      <artifactId>rapture-net_${sbv}</artifactId>
       <version>0.10.0</version>
     </dependency>   
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-json_${scala-binary-version}</artifactId>
+      <artifactId>rapture-json_${sbv}</artifactId>
       <version>1.0.0</version>
     </dependency>   
     <dependency>
       <groupId>com.propensive</groupId>
-      <artifactId>rapture-json-jackson_${scala-binary-version}</artifactId>
+      <artifactId>rapture-json-jackson_${sbv}</artifactId>
       <version>1.0.0</version>
     </dependency>   
 <!--     <dependency> -->
@@ -218,7 +218,7 @@
 <!--     </dependency> -->
 <!--     <dependency> -->
 <!--       <groupId>org.json4s</groupId> -->
-<!--       <artifactId>json4s-native_${scala-binary-version}</artifactId> -->
+<!--       <artifactId>json4s-native_${sbv}</artifactId> -->
 <!--       <version>3.2.11</version> -->
 <!--     </dependency>     -->
   </dependencies>
