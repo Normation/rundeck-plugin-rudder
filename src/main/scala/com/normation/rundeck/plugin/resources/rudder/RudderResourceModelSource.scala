@@ -23,50 +23,80 @@ import com.dtolabs.rundeck.core.common.INodeSet
 import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
-
 import scala.util.Left
 import org.apache.log4j.Logger
+import sun.security.action.GetBooleanAction
+
+
+
+sealed trait ApiVersion { def value: String }
+case object ApiV4 extends ApiVersion { val value = "4" }
+
+/*
+ * Rationnal to not use "latest" in place of 6.
+ * If you use latest with Rudder 2.11/3.0, you
+ * will have a clear error, nothing works => change version.
+ * Auto API upgrade are not relevant, since the plugin won't
+ * take advantage of them without an update.
+ */
+case object ApiV6 extends ApiVersion { val value = "6" }
 
 
 //Rudder base URL, for ex: https://my.company.com/rudder/
-final case class RudderUrl(baseUrl: String) {
+// version must be (4 or 5), or (latest or 6)
+final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
-  /*
-   * We are only compatible with API v6 and above
-   * Before v6, we can't have information on all nodes in
-   * one request.
-   */
-  private[this] val v = "6"
   private[this] val url = if(baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.size - 1) else baseUrl
 
   //last time an update was done, in ms - local timezone (i.e what System.getCurrentTimemillis returns)
   private[this] var lastUpdate = 0L
 
   //utility method
-  def nodesApi = s"${url}/api/${v}/nodes"
+  def nodesApi = s"${url}/api/${version.value}/nodes"
   def nodeApi(id: NodeId) = nodesApi + "/" + id.value
   def nodeUrl(id: NodeId) =  s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
 
-  def groupsApi = s"${url}/api/${v}/groups"
+  /**
+   * Query on groups is always "latest", since we have the same
+   * information on API v4, 5, 6
+   */
+  def groupsApi = s"${url}/api/latest/groups"
   def groupApi(id: GroupId) = groupsApi + "/" + id.value
 }
 
-final case class RefreshInterval(secondes: Int) {
+final case class TimeoutInterval(secondes: Int) {
   val ms = secondes * 1000
 }
 
 //of course, non value can be null
 final case class Configuration(
-    url: RudderUrl
-  , apiToken: String
-  , rundeckUser: String
-  , refreshInterval: RefreshInterval //time in ms, should never be < 5000ms
-
-  , envVarSSLPort: Option[String]
-  , envVarRundeckUser: Option[String]
+    url               : RudderUrl
+  , apiToken          : String
+  , apiTimeout        : TimeoutInterval
+  , checkCertificate  : Boolean
+  , refreshInterval   : TimeoutInterval //time in ms, should never be < 5000ms
+  , sshDefaultPort    : Int
+  , envVarSSLPort     : Option[String]
+  , rundeckDefaultUser: String
+  , envVarRundeckUser : Option[String]
 )
 
 
+
+//Rudder node ID, used as key to synchro nodes
+final case class NodeId(value: String)
+final case class GroupId(value: String)
+
+final case class RudderProp(name: String, value: String)
+
+
+final case class Group(
+    id     : GroupId
+  , name   : String
+  , nodeIds: Set[NodeId]
+  , enable : Boolean
+  , dynamic: Boolean
+)
 
 object RudderResourceModelSource {
 
@@ -74,29 +104,50 @@ object RudderResourceModelSource {
     import RudderResourceModelSourceFactory._
     def getProp(key: String): Failable[String] = {
       prop.getProperty(key) match {
-        case null  => Left(ErrorMsg(s"The property for key '${key}' was not found"))
+        case null  => Left(ErrorMsg(s"The property for mandatory key '${key}' was not found"))
         case value => Right(value)
       }
     }
+    def getIntProp(key: String) = getProp(key) match {
+      case Left(x) => Left(x)
+      case Right(x) => try {
+                     Right(x.toInt)
+                   } catch { case ex: Exception =>
+                     Left(ErrorMsg(s"Error when converting ${key} to int value: '${x}'", Some(ex)))
+                   }
+    }
+    def getBoolProp(key: String) = getProp(key) match {
+      case Left(x) => Left(x)
+      case Right(x) => try {
+                     Right(x.toBoolean)
+                   } catch { case ex: Exception =>
+                     Left(ErrorMsg(s"Error when converting ${key} to boolean value: '${x}'", Some(ex)))
+                   }
+    }
 
     for {
-      url     <- getProp(RUDDER_API_ENDPOINT).right
-      token   <- getProp(API_TOKEN).right
-      user    <- getProp(RUNDECK_USER).right
-      refresh <- {
-                   val _r =  getProp(REFRESH_INTERVAL).fold(_ => "30", identity)
-                   try {
-                     Right(RefreshInterval(_r.toInt))
-                   } catch {
-                     case ex: Exception =>
-                       Left(ErrorMsg(s"Error when converting refresh rate to int value: '${}=${}'", Some(ex)))
-                   }
-                 }.right
+      url        <- getProp(RUDDER_API_ENDPOINT).right
+      token      <- getProp(API_TOKEN).right
+      user       <- getProp(RUNDECK_USER).right
+      timeout    <- getIntProp(API_TIMEOUT).right
+      checkSSL   <- getBoolProp(API_CHECK_CERTIFICATE).right
+      sshPort    <- getIntProp(SSH_PORT).right
+      refresh    <- getIntProp(REFRESH_INTERVAL).right
+      apiVersion <- getProp(API_VERSION).fold(
+                      Left(_)
+                    , x => x match {
+                        case "4" => Right(ApiV4)
+                        case "6" => Right(ApiV6)
+                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '4' and '6'"))
+                    }).right
     } yield {
-      val envVarSSLPort = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
+      val envVarSSLPort = getProp(ENV_VARIABLE_SSL_PORT).fold(_ => None, x => Some(x))
       val envVarUser = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
 
-      new RudderResourceModelSource(Configuration(RudderUrl(url), token, user, refresh, envVarSSLPort, envVarUser))
+      //for now, timeout on Rudder API after 5s.
+      new RudderResourceModelSource(Configuration(
+          RudderUrl(url, apiVersion), token, TimeoutInterval(timeout), checkSSL, TimeoutInterval(refresh), sshPort, envVarSSLPort, user, envVarUser
+      ))
     }
   }
 
@@ -112,7 +163,7 @@ object RudderResourceModelSource {
 class RudderResourceModelSource(val configuration: Configuration) extends ResourceModelSource {
 
   //we are locally caching nodes and groups instances.
-  private[this] var nodes  = Map[NodeId, Node]()
+  private[this] var nodes  = Map[NodeId, NodeEntryImpl]()
   private[this] var groups = Map[GroupId, Group]()
 
   //last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
@@ -128,7 +179,7 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
     updateNodesAndGroups()
 
     //just map nodes to
-    val n = nodeToRundeck(nodes.values, groups.values).toSet
+    val n = nodeToRundeck(nodes, groups).toSet
 
     import scala.collection.JavaConverters._
     val set = new NodeSetImpl()
@@ -158,7 +209,7 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
       RudderAPIQuery.queryNodes(configuration) match {
         case Right(res) =>
           logger.debug(s"Found ${res.size} nodes on Rudder server")
-          this.nodes= res.map { x => (x.id, x) }.toMap
+          this.nodes= res
         case Left(ErrorMsg(msg, optEx)) =>
           logger.error(s"Error when trying to update the nodes from Rudder at url ${configuration.url.nodesApi}: ${msg}")
           optEx.foreach { ex =>
@@ -174,37 +225,28 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
    * Map a Rudder node to a Rundeck ressources.
    * Can't fail <== are we sure ?
    */
-  def nodeToRundeck(nodes: Iterable[Node], groups: Iterable[Group]): Iterable[INodeEntry] = {
+  def nodeToRundeck(nodes: Map[NodeId, NodeEntryImpl], groups: Map[GroupId,Group]): Iterable[INodeEntry] = {
+    import scala.collection.JavaConverters._
 
+    val groupByNode = getGroupForNode(groups)
+
+    //add groups
+    nodes.map { case (nodeId, node) =>
+      val groups = groupByNode.get(nodeId).getOrElse(Seq()).map( _.name)
+      //add groups to both rudder_information and tags.
+      val tags = (node.getTags.asScala ++ groups)
+      node.setTags(tags.asJava)
+      node.getAttributes().put("rudder_information:groups", groups.mkString(","))
+      node
+    }
+  }
+
+
+  private[this] def getGroupForNode(groups: Map[GroupId, Group]): Map[NodeId, Seq[Group]] = {
     //group groups by nodes id.
-    val groupByNodeId = groups.flatMap { g => g.nodeIds.map { n => (n,g) } }.toSeq.groupBy( _._1 ).toMap
+    val groupByNodeId = groups.values.flatMap { g => g.nodeIds.map { n => (n,g) } }.toSeq.groupBy( _._1 ).toMap
 
-    def groupForNode(nodeId: NodeId) : Seq[Group] = {
-      groupByNodeId.get(nodeId) match {
-        case None => Seq()
-        case Some(x) => x.map( _._2 )
-      }
-    }
-
-    nodes.map { node =>
-      val x = new NodeEntryImpl()
-
-      x.setNodename(node.hostname + " " + node.id.value)
-      x.setHostname(node.hostname+node.providedSSLPort.map(x => ":"+x).getOrElse(""))
-      x.setDescription(node.osFullName)
-      x.setOsName(node.osName)
-      x.setOsFamily(node.osFamily)
-      x.setOsArch(node.osArch)
-      x.setOsVersion(node.osVersion)
-      x.setUsername(node.rundeckUser)
-      x.getAttributes().put("rudder_information:node direct URL", node.remoteUrl)
-      x.getAttributes().put("rudder_information:groups", groupForNode(node.id).map( _.name).mkString(","))
-      x.getAttributes().put("rudder_information:id", node.id.value)
-      x.getAttributes().put("rudder_information:policy_server_id", node.policyServerId)
-      x.getAttributes().put("rudder_general:ram", node.ram)
-      x.getAttributes().put("rudder_networks:ips", node.ipAddresses.mkString(", "))
-      x
-    }
+    groupByNodeId.mapValues { _.map( _._2) }
   }
 
 }

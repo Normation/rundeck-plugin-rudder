@@ -59,14 +59,17 @@ object RudderResourceModelSourceFactory {
 
   val PROVIDER_NAME = "rudder"
   val API_TOKEN = "apiToken"
+  val API_VERSION = "apiVersion"
+  val API_TIMEOUT = "apiTimeout"
+  val API_CHECK_CERTIFICATE = "apiCheckCertificate"
   val RUDDER_API_ENDPOINT = "rudderAPIUrl"
   val REFRESH_INTERVAL = "refreshInterval"
   val RUNDECK_USER = "rundeckUser"
+  val SSH_PORT = "sshPort"
   val ENV_VARIABLE_RUNDECK_USER = "envVarRundeckUser"
   val ENV_VARIABLE_SSL_PORT = "envVarSSLPort"
 
-  //  TODO
-//  val GROUP_ID = "groupIds"
+  import scala.collection.JavaConverters._
 
   /*
    * All the properties are defined here
@@ -77,37 +80,27 @@ object RudderResourceModelSourceFactory {
     .title("Rudder Resources")
     .description("Produces nodes from Rudder")
 
-    .property(PropertyUtil.string(RUDDER_API_ENDPOINT, "Rudder base URL",
-        "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
-    .property(PropertyUtil.string(API_TOKEN, "API TOKEN",
-        "The API token to use for rundeck, defined in Rudder API administration page", true, null))
-    .property(PropertyUtil.integer(REFRESH_INTERVAL, "Refresh Interval",
-        "Minimum time in seconds between API requests to AWS (default is 30)", false, "30"))
-    .property(PropertyUtil.string(RUNDECK_USER, "Rundeck user",
-        "The user used by rundeck to connect to nodes", true, "rundeck"))
-    .property(PropertyUtil.string(RUNDECK_USER, "Rundeck user",
-        "The default user used by rundeck to connect to nodes", true, "rundeck"))
-    .property(PropertyUtil.string(ENV_VARIABLE_RUNDECK_USER, "Environment variable for rundeck user",
-        "If not empty, look for that environment variable on the node and use its value in place of default rundeck user configured above", false, null))
-    .property(PropertyUtil.string(ENV_VARIABLE_SSL_PORT, "Environment variable for ssl port",
-        "If not empty, look for that environment variable on the node and use its value in place of default SSL port", false, null))
-
-//    .property(PropertyUtil.string(GROUP_IDS, "Group IDs",
-//        "Only get nodes from the comma separated list of group UUID. Let empty to get all nodes. Invalid UUIDs will be ignored", false, null))
-
-//    .property(PropertyUtil.string(MAPPING_FILE, "Mapping File", "Property mapping File", false, null,
-//            new PropertyValidator() {
-//                public boolean isValid(final String s) throws ValidationException {
-//                    if (!new File(s).isFile()) {
-//                        throw new ValidationException("File does not exist: " + s);
-//                    }
-//                    return true;
-//                }
-//            }))
-//    .property(PropertyUtil.bool(USE_DEFAULT_MAPPING, "Use Default Mapping",
-//            "Start with default mapping definition. (Defaults will automatically be used if no others are " +
-//                    "defined.)",
-//            false, "true"))
+    .property(PropertyUtil.string(RUDDER_API_ENDPOINT, "Rudder base URL"
+      , "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
+    .property(PropertyUtil.select(API_VERSION, "API version"
+      , "The API version to use for rundeck. For Rudder 2.11 or 3.0, use '4', for more recent version use '6'", true
+      , "latest", Seq("4", "6").asJava))
+    .property(PropertyUtil.string(API_TOKEN, "API token"
+      , "The API token to use for rundeck, defined in Rudder API administration page", true, null))
+    .property(PropertyUtil.integer(API_TIMEOUT, "API timeout"
+      , "Maximum time to wait for an answer from Rudder API (default is 5s)", true, "5"))
+    .property(PropertyUtil.bool(API_CHECK_CERTIFICATE, "Check certificate"
+      , "If true, SSL certificate for Rudder API will be check (and in particular, self-signed certificated will be refused", true, "true"))
+    .property(PropertyUtil.integer(REFRESH_INTERVAL, "Refresh Interval"
+      , "Minimum time in seconds between API requests to AWS (default is 30)", true, "30"))
+    .property(PropertyUtil.string(RUNDECK_USER, "Rundeck user"
+      , "The user used by rundeck to connect to nodes", true, "rundeck"))
+    .property(PropertyUtil.string(ENV_VARIABLE_RUNDECK_USER, "Environment variable for rundeck user"
+      , "If not empty, look for that environment variable on the node and use its value in place of default rundeck user configured above", false, null))
+    .property(PropertyUtil.integer(SSH_PORT, "Default SSH port"
+      , "The default SSH port used by rundeck to connect to nodes", true, "22"))
+    .property(PropertyUtil.string(ENV_VARIABLE_SSL_PORT, "Environment variable for ssl port"
+      , "If not empty, look for that environment variable on the node and use its value in place of default SSL port", false, null))
     .build();
 }
 

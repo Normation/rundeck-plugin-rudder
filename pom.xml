@@ -101,7 +101,7 @@
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl lib/rapture-core_${sbv} lib/rapture-codec_${sbv} lib/rapture-cryto_${sbv} lib/rapture-data_${sbv} lib/rapture-io_${sbv} lib/rapture-json_${sbv} lib/rapture-json-jackson_${sbv} lib/rapture-mime_${sbv} lib/rapture-net_${sbv} lib/rapture-uri_${sbv}</Rundeck-Plugin-Libs> 
+              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-xml_${sbv} lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl lib/rapture-core_${sbv} lib/rapture-codec_${sbv} lib/rapture-cryto_${sbv} lib/rapture-data_${sbv} lib/rapture-io_${sbv} lib/rapture-json_${sbv} lib/rapture-json-jackson_${sbv} lib/rapture-mime_${sbv} lib/rapture-net_${sbv} lib/rapture-uri_${sbv}</Rundeck-Plugin-Libs> 
             </manifestEntries>
           </archive>
         </configuration>
@@ -200,6 +200,7 @@
       <artifactId>rapture-json-jackson_${sbv}</artifactId>
       <version>1.0.0</version>
     </dependency>   
+    
 <!--     <dependency> -->
 <!--       <groupId>org.apache.httpcomponents</groupId> -->
 <!--       <artifactId>httpclient</artifactId> -->
