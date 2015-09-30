@@ -37,29 +37,30 @@ import sun.security.action.GetBooleanAction
  */
 class RudderResourceModelSource(val configuration: Configuration) extends ResourceModelSource {
 
-  lazy val logger = Logger.getLogger(this.getClass)
+  private[this] lazy val logger = Logger.getLogger(this.getClass)
 
   //we are locally caching nodes and groups instances.
   private[this] var nodes  = Map[NodeId, NodeEntryImpl]()
-  private[this] var groups = Map[GroupId, Group]()
 
   //last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
   private[this] var lastUpdateTime = 0L
 
 
+  /**
+   * This is the actual, only integration point with Rundeck.
+   * The logic is to cache nodes for some time, to avoid too
+   * many request to Rudder (especially on v4 API)
+   */
   @throws(classOf[ResourceModelSourceException])
-  def getNodes(): INodeSet = {
+  override def getNodes(): INodeSet = {
     //update nodes and groups if needed
 
     logger.debug("Getting nodes from Rudder")
     updateNodesAndGroups()
 
-    //just map nodes to
-    val n = nodeToRundeck(nodes, groups).toSet
-
     import scala.collection.JavaConverters._
     val set = new NodeSetImpl()
-    set.putNodes(n.asJava)
+    set.putNodes(nodes.values.toSet[INodeEntry].asJava)
     set
 
   }
@@ -70,58 +71,55 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
     val now = System.currentTimeMillis()
 
     if(this.lastUpdateTime + configuration.refreshInterval.ms < now) {
-      this.lastUpdateTime = now
-      RudderAPIQuery.queryGroups(configuration) match {
-        case Right(res) =>
-          logger.debug(s"Found ${res.size} groups on Rudder server")
-          this.groups = res.map { x => (x.id, x) }.toMap
+      getNodesFromRudder(configuration) match {
         case Left(ErrorMsg(msg, optEx)) =>
-          logger.error(s"Error when trying to update the groups from Rudder at url ${configuration.url.groupsApi}: ${msg}")
+          //do not update cache
+          logger.error(s"Error when trying to get new nodes information from Rudder: ${msg}")
           optEx.foreach { ex =>
-            logger.error("Exception was: ", ex)
+            logger.error("Root exception was: ", ex)
           }
-      }
-
-      RudderAPIQuery.queryNodes(configuration) match {
-        case Right(res) =>
-          logger.debug(s"Found ${res.size} nodes on Rudder server")
-          this.nodes= res
-        case Left(ErrorMsg(msg, optEx)) =>
-          logger.error(s"Error when trying to update the nodes from Rudder at url ${configuration.url.nodesApi}: ${msg}")
-          optEx.foreach { ex =>
-            logger.error("Exception was: ", ex)
-          }
+        case Right(n) =>
+          //we only update time here, meaning that each time there is an error,
+          //we will try again next time.
+          //that may lead to funny loop when there is always error and user query quickly the
+          //method, but the user would not understand if he repairs an error on Rudder, and
+          //things don't work immediately.
+          this.lastUpdateTime = now
+          this.nodes = n
       }
     } else {
       logger.debug(s"Not updating nodes and groups because refresh interval of ${configuration.refreshInterval.secondes}s was not elapsed since last update.")
     }
   }
 
-  /*
-   * Map a Rudder node to a Rundeck ressources.
-   * Can't fail <== are we sure ?
+  /**
+   * This method unconditionnaly get new nodes from Rudder.
+   * It builds a the resulting rundeck nodes, and in particular
+   * add groups as tag
    */
-  def nodeToRundeck(nodes: Map[NodeId, NodeEntryImpl], groups: Map[GroupId,Group]): Iterable[INodeEntry] = {
-    import scala.collection.JavaConverters._
+  def getNodesFromRudder(config: Configuration): Failable[Map[NodeId, NodeEntryImpl]] = {
 
-    val groupByNode = getGroupForNode(groups)
-
-    //add groups
-    nodes.map { case (nodeId, node) =>
-      val groups = groupByNode.get(nodeId).getOrElse(Seq()).map( _.name)
-      //add groups to both rudder_information and tags.
-      val tags = (node.getTags.asScala ++ groups)
-      node.setTags(tags.asJava)
-      node.getAttributes().put("rudder_information:groups", groups.mkString(","))
-      node
+    for {
+      groups   <- RudderAPIQuery.queryGroups(config).right
+      newNodes <- RudderAPIQuery.queryNodes(config).right
+    } yield {
+      import scala.collection.JavaConverters._
+      val groupByNode = getGroupForNode(groups)
+      //add groups
+      newNodes.map { case (nodeId, node) =>
+        val groups = groupByNode.get(nodeId).getOrElse(Seq()).map( _.name)
+        //add groups to both rudder_information and tags.
+        val tags = (node.getTags.asScala ++ groups)
+        node.setTags(tags.asJava)
+        node.getAttributes().put("rudder_information:groups", groups.mkString(","))
+        (nodeId, node)
+      }.toMap
     }
   }
 
-
-  private[this] def getGroupForNode(groups: Map[GroupId, Group]): Map[NodeId, Seq[Group]] = {
+  private[this] def getGroupForNode(groups: Seq[Group]): Map[NodeId, Seq[Group]] = {
     //group groups by nodes id.
-    val groupByNodeId = groups.values.flatMap { g => g.nodeIds.map { n => (n,g) } }.toSeq.groupBy( _._1 ).toMap
-
+    val groupByNodeId = groups.flatMap { g => g.nodeIds.map { n => (n,g) } }.toSeq.groupBy( _._1 ).toMap
     groupByNodeId.mapValues { _.map( _._2) }
   }
 

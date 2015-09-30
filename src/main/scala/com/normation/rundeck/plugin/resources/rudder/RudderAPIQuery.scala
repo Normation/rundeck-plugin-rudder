@@ -17,17 +17,13 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import rapture.core._
+import rapture.core.timeSystems.numeric
 import rapture.io._
 import rapture.net._
-import rapture.uri._
 import rapture.json._
-import rapture.codec._
-import encodings.`UTF-8`
-import jsonBackends.jackson._
-import timeSystems.numeric
-import scala.util.Left
-import org.apache.log4j.Logger
-import rapture.data.MissingValueException
+import rapture.codec.encodings.`UTF-8`
+import rapture.json.jsonBackends.jackson._
+
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 
 /*

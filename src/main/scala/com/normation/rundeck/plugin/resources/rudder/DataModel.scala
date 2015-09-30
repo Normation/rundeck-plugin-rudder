@@ -16,7 +16,6 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
-import org.apache.log4j.Logger
 
 /**
  * This file contains data structure definition

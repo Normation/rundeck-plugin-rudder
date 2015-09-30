@@ -17,6 +17,11 @@
 package com.normation.rundeck.plugin.resources.rudder;
 
 import java.util.Properties
+
+import scala.Left
+import scala.Right
+import scala.collection.JavaConverters
+
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
 import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
@@ -24,6 +29,7 @@ import com.dtolabs.rundeck.core.plugins.configuration.Describable
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
+
 import org.apache.log4j.Logger
 
 
@@ -45,8 +51,12 @@ import org.apache.log4j.Logger
 @Plugin(name = "rudder", service = "ResourceModelSource")
 class RudderResourceModelSourceFactory(framework: Framework) extends ResourceModelSourceFactory with Describable {
 
-  lazy val logger = Logger.getLogger(this.getClass)
+  private[this] lazy val logger = Logger.getLogger(this.getClass)
 
+  /**
+   * Try to create a new Rudder resource from a set of properties.
+   * Report errors to Rundeck by throwing exceptions.
+   */
   override def createResourceModelSource(properties: Properties) = {
     RudderResourceModelSourceFactory.configFromProperties(properties) match {
       case Left(ErrorMsg(msg, optex)) =>
@@ -64,6 +74,9 @@ class RudderResourceModelSourceFactory(framework: Framework) extends ResourceMod
     }
   }
 
+  /*
+   * Get description - yeah, really ! (useful documentation)
+   */
   override def getDescription() = {
     RudderResourceModelSourceFactory.DESC
   }
@@ -88,12 +101,10 @@ object RudderResourceModelSourceFactory {
   val PROVIDER_NAME = "rudder"
 
   val RUDDER_BASE_URL = "rudderUrl"
-
   val API_TOKEN = "apiToken"
   val API_VERSION = "apiVersion"
   val API_TIMEOUT = "apiTimeout"
   val API_CHECK_CERTIFICATE = "apiCheckCertificate"
-
   val REFRESH_INTERVAL = "refreshInterval"
 
   val DEFAULT_RUNDECK_USER = "defaultRundeckUser"
@@ -138,37 +149,24 @@ object RudderResourceModelSourceFactory {
    * value make sense, etc.
    */
   def configFromProperties(prop: Properties): Failable[Configuration] = {
-    def getProp(key: String): Failable[String] = {
-      prop.getProperty(key) match {
-        case null  => Left(ErrorMsg(s"The property for mandatory key '${key}' was not found"))
-        case value => Right(value)
-      }
+    def getTProp[T](key: String, trans: String => T): Failable[T] = prop.getProperty(key) match {
+      case null  => Left(ErrorMsg(s"The property for mandatory key '${key}' was not found"))
+      case value => try {
+                      Right(trans(value))
+                    } catch { case ex: Exception =>
+                      Left(ErrorMsg(s"Error when converting ${key}: '${value}'", Some(ex)))
+                    }
     }
-    def getIntProp(key: String) = getProp(key) match {
-      case Left(x) => Left(x)
-      case Right(x) => try {
-                         Right(x.toInt)
-                       } catch { case ex: Exception =>
-                         Left(ErrorMsg(s"Error when converting ${key} to int value: '${x}'", Some(ex)))
-                       }
-    }
-    def getBoolProp(key: String) = getProp(key) match {
-      case Left(x) => Left(x)
-      case Right(x) => try {
-                         Right(x.toBoolean)
-                       } catch { case ex: Exception =>
-                         Left(ErrorMsg(s"Error when converting ${key} to boolean value: '${x}'", Some(ex)))
-                       }
-    }
+    def getProp(key: String): Failable[String] = getTProp(key, identity)
 
     for {
       url        <- getProp(RUDDER_BASE_URL).right
       token      <- getProp(API_TOKEN).right
       user       <- getProp(DEFAULT_RUNDECK_USER).right
-      timeout    <- getIntProp(API_TIMEOUT).right
-      checkSSL   <- getBoolProp(API_CHECK_CERTIFICATE).right
-      sshPort    <- getIntProp(DEFAULT_SSH_PORT).right
-      refresh    <- getIntProp(REFRESH_INTERVAL).right
+      timeout    <- getTProp(API_TIMEOUT, Integer.parseInt).right
+      checkSSL   <- getTProp(API_CHECK_CERTIFICATE, _.toBoolean).right
+      sshPort    <- getTProp(DEFAULT_SSH_PORT, _.toInt).right
+      refresh    <- getTProp(REFRESH_INTERVAL, _.toInt).right
       apiVersion <- getProp(API_VERSION).fold(
                       Left(_)
                     , x => x match {
@@ -180,6 +178,7 @@ object RudderResourceModelSourceFactory {
       val envVarSSLPort = getProp(ENV_VARIABLE_SSH_PORT).fold(_ => None, x => Some(x))
       val envVarUser = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
 
+      //yeah, we have a nice, curated configuration object now!
       Configuration(
           RudderUrl(url, apiVersion), token, TimeoutInterval(timeout), checkSSL, TimeoutInterval(refresh)
         , sshPort, envVarSSLPort, user, envVarUser
