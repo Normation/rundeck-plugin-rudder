@@ -28,131 +28,6 @@ import org.apache.log4j.Logger
 import sun.security.action.GetBooleanAction
 
 
-
-sealed trait ApiVersion { def value: String }
-case object ApiV4 extends ApiVersion { val value = "4" }
-
-/*
- * Rationnal to not use "latest" in place of 6.
- * If you use latest with Rudder 2.11/3.0, you
- * will have a clear error, nothing works => change version.
- * Auto API upgrade are not relevant, since the plugin won't
- * take advantage of them without an update.
- */
-case object ApiV6 extends ApiVersion { val value = "6" }
-
-
-//Rudder base URL, for ex: https://my.company.com/rudder/
-// version must be (4 or 5), or (latest or 6)
-final case class RudderUrl(baseUrl: String, version: ApiVersion) {
-
-  private[this] val url = if(baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.size - 1) else baseUrl
-
-  //last time an update was done, in ms - local timezone (i.e what System.getCurrentTimemillis returns)
-  private[this] var lastUpdate = 0L
-
-  //utility method
-  def nodesApi = s"${url}/api/${version.value}/nodes"
-  def nodeApi(id: NodeId) = nodesApi + "/" + id.value
-  def nodeUrl(id: NodeId) =  s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
-
-  /**
-   * Query on groups is always "latest", since we have the same
-   * information on API v4, 5, 6
-   */
-  def groupsApi = s"${url}/api/latest/groups"
-  def groupApi(id: GroupId) = groupsApi + "/" + id.value
-}
-
-final case class TimeoutInterval(secondes: Int) {
-  val ms = secondes * 1000
-}
-
-//of course, non value can be null
-final case class Configuration(
-    url               : RudderUrl
-  , apiToken          : String
-  , apiTimeout        : TimeoutInterval
-  , checkCertificate  : Boolean
-  , refreshInterval   : TimeoutInterval //time in ms, should never be < 5000ms
-  , sshDefaultPort    : Int
-  , envVarSSLPort     : Option[String]
-  , rundeckDefaultUser: String
-  , envVarRundeckUser : Option[String]
-)
-
-
-
-//Rudder node ID, used as key to synchro nodes
-final case class NodeId(value: String)
-final case class GroupId(value: String)
-
-final case class RudderProp(name: String, value: String)
-
-
-final case class Group(
-    id     : GroupId
-  , name   : String
-  , nodeIds: Set[NodeId]
-  , enable : Boolean
-  , dynamic: Boolean
-)
-
-object RudderResourceModelSource {
-
-  def fromProperties(prop: Properties): Failable[RudderResourceModelSource] = {
-    import RudderResourceModelSourceFactory._
-    def getProp(key: String): Failable[String] = {
-      prop.getProperty(key) match {
-        case null  => Left(ErrorMsg(s"The property for mandatory key '${key}' was not found"))
-        case value => Right(value)
-      }
-    }
-    def getIntProp(key: String) = getProp(key) match {
-      case Left(x) => Left(x)
-      case Right(x) => try {
-                     Right(x.toInt)
-                   } catch { case ex: Exception =>
-                     Left(ErrorMsg(s"Error when converting ${key} to int value: '${x}'", Some(ex)))
-                   }
-    }
-    def getBoolProp(key: String) = getProp(key) match {
-      case Left(x) => Left(x)
-      case Right(x) => try {
-                     Right(x.toBoolean)
-                   } catch { case ex: Exception =>
-                     Left(ErrorMsg(s"Error when converting ${key} to boolean value: '${x}'", Some(ex)))
-                   }
-    }
-
-    for {
-      url        <- getProp(RUDDER_API_ENDPOINT).right
-      token      <- getProp(API_TOKEN).right
-      user       <- getProp(RUNDECK_USER).right
-      timeout    <- getIntProp(API_TIMEOUT).right
-      checkSSL   <- getBoolProp(API_CHECK_CERTIFICATE).right
-      sshPort    <- getIntProp(SSH_PORT).right
-      refresh    <- getIntProp(REFRESH_INTERVAL).right
-      apiVersion <- getProp(API_VERSION).fold(
-                      Left(_)
-                    , x => x match {
-                        case "4" => Right(ApiV4)
-                        case "6" => Right(ApiV6)
-                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '4' and '6'"))
-                    }).right
-    } yield {
-      val envVarSSLPort = getProp(ENV_VARIABLE_SSL_PORT).fold(_ => None, x => Some(x))
-      val envVarUser = getProp(ENV_VARIABLE_RUNDECK_USER).fold(_ => None, x => Some(x))
-
-      //for now, timeout on Rudder API after 5s.
-      new RudderResourceModelSource(Configuration(
-          RudderUrl(url, apiVersion), token, TimeoutInterval(timeout), checkSSL, TimeoutInterval(refresh), sshPort, envVarSSLPort, user, envVarUser
-      ))
-    }
-  }
-
-}
-
 /**
  * This is the entry point for one Rudder provisionning.
  * It is responsible for the whole querying and mapping of Rudder nodes
@@ -162,6 +37,8 @@ object RudderResourceModelSource {
  */
 class RudderResourceModelSource(val configuration: Configuration) extends ResourceModelSource {
 
+  lazy val logger = Logger.getLogger(this.getClass)
+
   //we are locally caching nodes and groups instances.
   private[this] var nodes  = Map[NodeId, NodeEntryImpl]()
   private[this] var groups = Map[GroupId, Group]()
@@ -169,7 +46,6 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
   //last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
   private[this] var lastUpdateTime = 0L
 
-  private[this] val logger = Logger.getLogger("rudder")
 
   @throws(classOf[ResourceModelSourceException])
   def getNodes(): INodeSet = {

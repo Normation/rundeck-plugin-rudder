@@ -30,13 +30,27 @@ import org.apache.log4j.Logger
 import rapture.data.MissingValueException
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 
-
-/**
- * The part in charge to do REST query to Rudder
- * and parser resulting json
+/*
+ * This file manage the REST query logic. It's where queries
+ * to Rudder server are made, and result parsed.
+ *
+ * There is only one implementation, so there is only one
+ * object for that.
+ *
+ * The main methods are:
+ * - queryNodes, which given the configuration will either query
+ *   APIv4 or APIv6 for the list of node details.
+ * - queryGroups, which get information about groups.
+ *
+ * That file does not contain the rundeck interface logic
+ * (when query are done, how results are presented, etc).
  */
 object RudderAPIQuery {
 
+  /*
+   * The list of sub-categories of details to include
+   * on node information.
+   */
   val topic = "?include=" + List(
       "environmentVariables" //to look for a specific user / port to use for rundeck
     , "networkInterfaces" // not sure
@@ -63,8 +77,8 @@ object RudderAPIQuery {
 
   /**
    * Process a query returning a list of nodes. This is the optimized query
-   * for API version 6: only one query, but it is the same processor when
-   * you need to query one node details.
+   * for API version 6: only one query, but it is the same logic (and hence the
+   * same method) when you need to query one node details.
    */
   def queryNodesDetails(config: Configuration, queryUrl: String): Failable[Map[NodeId,NodeEntryImpl]] = {
     try {
@@ -87,9 +101,9 @@ object RudderAPIQuery {
 
   /**
    * For api v4, we need to make (number nodes) + 1 query to API !
-   *
+   * This method handle the logic to do so.
    */
-  def queryNodesV4(config: Configuration): Failable[Map[NodeId,NodeEntryImpl]] = {
+  def queryNodesV4(config: Configuration): Failable[Map[NodeId, NodeEntryImpl]] = {
 
     //only for extracting from JSON
     case class Node(id: String)
@@ -123,7 +137,7 @@ object RudderAPIQuery {
   def queryGroups(config: Configuration) : Failable[Seq[Group]] = {
     try {
       val url = Http.parse(config.url.groupsApi)
-      val page = url.get(timeout = 5000L, ignoreInvalidCertificates = !config.checkCertificate, httpHeaders = Map("X-API-Token" -> config.apiToken)).slurp[Char]
+      val page = url.get(timeout = config.apiTimeout.ms, ignoreInvalidCertificates = !config.checkCertificate, httpHeaders = Map("X-API-Token" -> config.apiToken)).slurp[Char]
       val json = Json.parse(page)
 
       if(json.result.as[String] == "success") {
@@ -141,7 +155,7 @@ object RudderAPIQuery {
   /**
    * Extract a group from what should be a JSON for group.
    */
-  private[this] def extractGroup(json: Json) = {
+  def extractGroup(json: Json) = {
     try {
       Right(Group(
           id = GroupId(json.id.as[String])
@@ -156,7 +170,15 @@ object RudderAPIQuery {
 
   }
 
-  private[this] def extractNode(json: Json, config: Configuration): Failable[(NodeId, NodeEntryImpl)] = {
+  /**
+   * This is where all the mapping logic between JSON (for node details) and
+   * Rundeck "NodeEntry" object is done.
+   * We don't use the interface, because we would must likelly not be compatible
+   * with other implementations, and the groups part must be added later.
+   * (i.e: it's our internals, it would be a false abstraction to try to hide
+   * the actual implementation for the current state of the plugin).
+   */
+  def extractNode(json: Json, config: Configuration): Failable[(NodeId, NodeEntryImpl)] = {
 
     try {
       val id = NodeId(json.id.as[String])
@@ -173,70 +195,87 @@ object RudderAPIQuery {
           , config.envVarRundeckUser.flatMap { x => env.get(x) }.getOrElse(config.rundeckDefaultUser)
         )
       }
-      val x = new NodeEntryImpl()
+      val node = new NodeEntryImpl()
 
-      x.setNodename(json.hostname.as[String] + " " + id.value)
-      x.setHostname(json.hostname.as[String] + ":" + providedSSLPort.getOrElse(config.sshDefaultPort.toString))
-      x.setDescription(json.os.fullName.as[String])
-      x.setOsName(json.os.name.as[String])
-      x.setOsFamily(json.os.`type`.as[String])
-      x.setOsArch(json.architectureDescription.as[String])
-      x.setOsVersion(json.os.version.as[String])
-      x.setUsername(rundeckUser)
+      //all these one are mandatory
+      node.setNodename(json.hostname.as[String] + " " + id.value)
+      node.setHostname(json.hostname.as[String] + ":" + providedSSLPort.getOrElse(config.sshDefaultPort.toString))
+      node.setOsName(json.os.name.as[String])
+      node.setOsFamily(json.os.`type`.as[String])
+      node.setOsArch(json.architectureDescription.as[String])
+      node.setOsVersion(json.os.version.as[String])
+      node.setUsername(rundeckUser)
+      node.getAttributes().put("rudder_information:id", id.value)
+      node.getAttributes().put("rudder_information:node direct URL", config.url.nodeUrl(id))
+      node.getAttributes().put("rudder_information:policy server id", json.policyServerId.as[String])
+      node.getAttributes().put("rudder_information:last inventory date", json.lastInventoryDate.as[String])
+      node.getAttributes().put("rudder_information:node status", json.status.as[String])
 
-      x.getAttributes().put("Total RAM", json.ram.as[Int].toString)
-      x.getAttributes().put("IP Addresses", json.ipAddresses.as[List[String]].mkString(", "))
-      json.accounts.as[Option[List[String]]].foreach { accounts =>
-        x.getAttributes().put("Accounts on server", accounts.mkString(", "))
+
+      //these one are not - make as[XXX] return Try, so that it's easier to
+      //only add relevant properties to the node object
+      import modes.returnTry
+
+      json.os.fullName.as[String].foreach( node.setDescription )
+      json.ram.as[Int].foreach { x => node.getAttributes().put("Total RAM", x.toString) }
+      json.ipAddresses.as[List[String]].foreach { x => node.getAttributes().put("IP Addresses", x.mkString(", ")) }
+
+      //rudder properties
+      case class JsonRudderProp(name: String, value: String)
+      json.properties.as[List[Option[JsonRudderProp]]].foreach { _.foreach { _.foreach { case JsonRudderProp(name, value) =>
+        node.getAttributes().put(s"Rudder Node Properties:${name}", value)
+      } } }
+
+
+      //accounts
+      json.accounts.as[List[String]].foreach { accounts =>
+        node.getAttributes().put("Accounts on server", accounts.mkString(", "))
       }
 
-      x.getAttributes().put("rudder_information:id", id.value)
-      x.getAttributes().put("rudder_information:node direct URL", config.url.nodeUrl(id))
-      x.getAttributes().put("rudder_information:policy server id", json.policyServerId.as[String])
-      x.getAttributes().put("rudder_information:last inventory date", json.lastInventoryDate.as[String])
-      x.getAttributes().put("rudder_information:node status", json.status.as[String])
-
-
-
       //env variables
-      json.environmentVariables.as[Option[Map[String, String]]].foreach { _.foreach { case (k,v) =>
-        x.getAttributes().put(s"rudder_environment_variables:${k}", v)
+      json.environmentVariables.as[Map[String, String]].foreach { _.foreach { case (k,v) =>
+        node.getAttributes().put(s"rudder_environment_variables:${k}", v)
       } }
 
       //network
-      json.networkInterfaces.as[Option[Seq[Json]]].foreach { _.foreach { case j =>
-        val all = j.as[Map[String, Json]]
-        val name = all("name").as[String]
-        val ips = all("ipAddresses").as[Seq[String]].mkString(", ")
-
-        x.getAttributes().put(s"rudder_network_interface:${name}:IP addresses", ips)
-        all.filterKeys { k => k != "name" && k != "ipAddresses" }.foreach { case (k,v) =>
-          x.getAttributes().put(s"rudder_network_interface:${name}:${k}", v.as[String])
+      json.networkInterfaces.as[Seq[Map[String, Json]]].foreach { _.foreach { case j =>
+        j("name").as[String].foreach { name =>
+          j("ipAddresses").as[Seq[String]].foreach { ips =>
+            node.getAttributes().put(s"rudder_network_interface:${name}:IP addresses", ips.mkString(", "))
+          }
+          j.filterKeys { k => k != "name" && k != "ipAddresses" }.foreach { case (k,v) =>
+            v.as[String].orElse(v.as[Int]).orElse(v.as[Boolean]).foreach { value =>
+              node.getAttributes().put(s"rudder_network_interface:${name}:${k}", value.toString)
+            }
+          }
         }
       } }
 
-
-
       //storage
-      json.storage.as[Option[Seq[Map[String, Any]]]].foreach { _.foreach { case all =>
-        val name = all("name") //mandatory
-        all.filterKeys { k => k != "name" }.foreach { case (k,v) =>
-          val value = v match { case z:String => z; case _ => v.toString }
-          x.getAttributes().put(s"rudder_storage:${name}:${k}", value)
+      json.storage.as[Seq[Map[String, Json]]].foreach { _.foreach { case all =>
+        //name must be there mandatory
+        all("name").as[String].foreach { name =>
+            all.filterKeys { k => k != "name" }.foreach { case (k,v) =>
+              v.as[String].orElse(v.as[Int]).orElse(v.as[Boolean]).foreach { value =>
+                node.getAttributes().put(s"rudder_storage:${name}:${k}", value.toString)
+              }
+            }
         }
       } }
 
       //file systems
-      json.fileSystems.as[Option[Seq[Map[String, Any]]]].foreach { _.foreach { case all =>
-        val name = all("name") //mandatory
-        all.filterKeys { k => k != "name" }.foreach { case (k,v) =>
-          val value = v match { case z:String => z; case _ => v.toString }
-          x.getAttributes().put(s"rudder_file_system:${name}:${k}", value)
+      json.fileSystems.as[Seq[Map[String, Json]]].foreach { _.foreach { case all =>
+        //name must be there mandatory
+        all("name").as[String].foreach { name =>
+            all.filterKeys { k => k != "name" }.foreach { case (k,v) =>
+              v.as[String].orElse(v.as[Int]).orElse(v.as[Boolean]).foreach { value =>
+                node.getAttributes().put(s"rudder_file_system:${name}:${k}", value.toString)
+              }
+            }
         }
       } }
 
-
-      Right((id, x))
+      Right((id, node))
 
     } catch {
       case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))
@@ -244,41 +283,4 @@ object RudderAPIQuery {
   }
 }
 
-object MainTest {
-  def main(args: Array[String]): Unit = {
-
-   val configV6 = Configuration(
-       RudderUrl("https://192.168.46.2/rudder", ApiV6)
-     , "WHFMJwnOl9kxegoDOjUBB7xrunWLqdTe"
-     , TimeoutInterval(5), false, TimeoutInterval(30)
-     , 22, Some("PERIOD")
-     ,  "rundeck", Some("SUDO_USER")
-   )
-
-   val configV4 = Configuration(
-       RudderUrl("https://orchestrateur-4.labo.normation.com/rudder", ApiV4)
-     , "dTxvl4eL8p3YqvwefVbaJLdy8DyEt7Vw"
-     , TimeoutInterval(5), false, TimeoutInterval(30)
-     , 22, Some("PERIOD")
-     , "rundeck", Some("SUDO_USER")
-   )
-
-
-   def print[T](res: Failable[T]): Unit = res match {
-     case Right(x) => println(x)
-     case Left(ErrorMsg(msg, optEx)) =>
-         println("Error for nodes: " + msg)
-         optEx.foreach { _.printStackTrace }
-   }
-
-   val config = configV4
-   print(RudderAPIQuery.queryNodes(config).fold(Left(_), x  => Right(x.map( _._2.getNodename ))))
-   print(RudderAPIQuery.queryGroups(config).fold(Left(_), x  => Right(x.map( _.name))))
-
-   val mgn = new RudderResourceModelSource(config)
-
-   mgn.getNodes()
-
-  }
-}
 
