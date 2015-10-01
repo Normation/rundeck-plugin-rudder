@@ -65,8 +65,9 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
 
   }
 
-  //unit is saying that the methods handle both the update and
-  //logging/managing errors
+  /**
+   * Update the local node cache is needed
+   */
   def updateNodesAndGroups(): Unit = {
     val now = System.currentTimeMillis()
 
@@ -99,6 +100,8 @@ class RudderResourceModelSource(val configuration: Configuration) extends Resour
    */
   def getNodesFromRudder(config: Configuration): Failable[Map[NodeId, NodeEntryImpl]] = {
 
+    //not sure if it's better to not update at all if I don't get groups (like here)
+    //or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
       groups   <- RudderAPIQuery.queryGroups(config).right
       newNodes <- RudderAPIQuery.queryNodes(config).right
