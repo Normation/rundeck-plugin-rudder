@@ -79,7 +79,11 @@ object RudderAPIQuery {
   def queryNodesDetails(config: Configuration, queryUrl: String): Failable[Map[NodeId,NodeEntryImpl]] = {
     try {
       val url = Http.parse(queryUrl + topic)
-      val page = url.get(timeout = 5000L, ignoreInvalidCertificates = !config.checkCertificate, httpHeaders = Map("X-API-Token" -> config.apiToken)).slurp[Char]
+      val page = url.get(
+          timeout = config.apiTimeout.ms
+        , ignoreInvalidCertificates = !config.checkCertificate
+        , httpHeaders = Map("X-API-Token" -> config.apiToken
+      )).slurp[Char]
       val json = Json.parse(page)
 
       if(json.result.as[String] == "success") {
@@ -106,7 +110,11 @@ object RudderAPIQuery {
 
     try {
       val url = Http.parse(config.url.nodesApi)
-      val page = url.get(timeout = 5000L, ignoreInvalidCertificates = !config.checkCertificate, httpHeaders = Map("X-API-Token" -> config.apiToken)).slurp[Char]
+      val page = url.get(
+          timeout = config.apiTimeout.ms
+        , ignoreInvalidCertificates = !config.checkCertificate
+        , httpHeaders = Map("X-API-Token" -> config.apiToken
+      )).slurp[Char]
       val json = Json.parse(page)
 
       if(json.result.as[String] == "success") {
@@ -133,7 +141,11 @@ object RudderAPIQuery {
   def queryGroups(config: Configuration) : Failable[Seq[Group]] = {
     try {
       val url = Http.parse(config.url.groupsApi)
-      val page = url.get(timeout = config.apiTimeout.ms, ignoreInvalidCertificates = !config.checkCertificate, httpHeaders = Map("X-API-Token" -> config.apiToken)).slurp[Char]
+      val page = url.get(
+          timeout = config.apiTimeout.ms
+        , ignoreInvalidCertificates = !config.checkCertificate
+        , httpHeaders = Map("X-API-Token" -> config.apiToken
+      )).slurp[Char]
       val json = Json.parse(page)
 
       if(json.result.as[String] == "success") {
