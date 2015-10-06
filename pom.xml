@@ -8,7 +8,7 @@
   </parent>
   <groupId>org.rundeck-plugins</groupId>
   <artifactId>rundeck-rudder-nodes-plugin</artifactId>
-  <version>1.0-SNAPSHOT</version>
+  <version>1.0</version>
   <name>Rundeck Rudder Node Plugin</name>
   <url>http://rundeck.org</url>
   <inceptionYear>2015</inceptionYear>
