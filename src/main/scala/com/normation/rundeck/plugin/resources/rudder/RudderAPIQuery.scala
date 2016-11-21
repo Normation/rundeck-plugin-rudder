@@ -169,8 +169,14 @@ object RudderAPIQuery {
           id = GroupId(json.id.as[String])
         , name = json.displayName.as[String]
         , nodeIds = json.nodeIds.as[Set[String]].map(NodeId(_))
-        , enable = json.isEnabled.as[Boolean]
-        , dynamic = json.isDynamic.as[Boolean]
+        , enable = { //enable replaces isEnable in Rudder 4.0 API
+                     import modes.returnTry
+                     json.enable.as[Boolean].orElse(json.isEnabled.as[Boolean]).getOrElse(true)
+                   }
+        , dynamic = { //dynamic replaces isDynamic in Rudder 4.0 API
+                      import modes.returnTry
+                      json.dynamic.as[Boolean].orElse(json.isDynamic.as[Boolean]).getOrElse(false)
+                    }
       ))
     } catch {
       case ex: Exception => Left(ErrorMsg("Error when trying to parse node information", Some(ex)))

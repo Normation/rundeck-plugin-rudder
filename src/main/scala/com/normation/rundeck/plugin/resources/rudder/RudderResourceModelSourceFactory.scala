@@ -122,7 +122,7 @@ object RudderResourceModelSourceFactory {
       , "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
     .property(PropertyUtil.select(API_VERSION, "API version"
       , "The API version to use for rundeck. For Rudder 2.11 or 3.0, use '4', for more recent version use '6'", true
-      , "latest", Seq("4", "6").asJava))
+      , "latest", Seq("6", "4").asJava))
     .property(PropertyUtil.string(API_TOKEN, "API token"
       , "The API token to use for rundeck, defined in Rudder API administration page", true, null))
     .property(PropertyUtil.integer(API_TIMEOUT, "API timeout"

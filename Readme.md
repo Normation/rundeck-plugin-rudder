@@ -1,20 +1,22 @@
 Rundeck Rudder Nodes Plugin
 ===========================
 
-Version: 0.1
+Version: 1.0
 
-This is a Resource Model Source plugin for [RunDeck][] 2.5+ that provides
+This is a Resource Model Source plugin for [RunDeck][] 2.5.x and 2.6.x that provides
 Rudder node as nodes for the RunDeck server.
 
 [RunDeck]: http://rundeck.org
 
+It works with Rudder standard API for Rudder 2.11 and up (tested with Rudder 2.11.x, 
+3.x, 4.x)
 
 Installation
 ------------
 
-Download from the [releases page](https://github.com/rundeck-plugins/rundeck-rudder-nodes-plugin/releases).
+Download from the [releases page](https://github.com/Normation/rundeck-plugin-rudder/releases).
 
-Put the `rundeck-rudder-nodes-plugin-0.1.jar` into your `$RDECK_BASE/libext` dir.
+Put the `rundeck-rudder-nodes-plugin-X.Y.jar` into your `$RDECK_BASE/libext` dir.
 
 Alternatively, you can build the project from source with Maven (mvn install) and get the
 resulting jar from your local repository (see Maven console output for exact location). 
@@ -22,9 +24,17 @@ resulting jar from your local repository (see Maven console output for exact loc
 Usage
 -----
 
-You can configure the Resource Model Sources for a project either via the
-RunDeck GUI, under the "Admin" page, or you can modify the `project.properties`
-file to configure the sources.
+Documentation about available properties for the plugin is available in the "Admin" 
+page, in "Resource Model Sources" > "Rudder Resources", 
+
+You can configure the Resource Model Sources on a per-project basis, via the RunDeck GUI. 
+When a project is selected in RunDeck main bar, select the "Configure" button, then 
+"Simple Configuration" > "Resource Model Source". 
+
+Here, you need to "Add Source" > "Rudder Resources", and file the fields. 
+
+You can also modify the `${rundeck_base_dir}/projects/${project_name}/etc/project.properties`
+file directly to configure the sources.
 
 See: [Resource Model Source Configuration](http://rundeck.org/docs/plugins-user-guide/configuring.html#resource-model-sources)
 
