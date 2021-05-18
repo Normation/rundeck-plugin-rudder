@@ -16,16 +16,15 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
-import java.util.Properties
 import com.dtolabs.rundeck.core.resources.ResourceModelSource
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceException
 import com.dtolabs.rundeck.core.common.INodeSet
 import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
+import org.slf4j.LoggerFactory
+
 import scala.util.Left
-import org.apache.log4j.Logger
-import sun.security.action.GetBooleanAction
 
 
 /**
@@ -37,7 +36,7 @@ import sun.security.action.GetBooleanAction
  */
 class RudderResourceModelSource(val configuration: Configuration) extends ResourceModelSource {
 
-  private[this] lazy val logger = Logger.getLogger(this.getClass)
+  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   //we are locally caching nodes and groups instances.
   private[this] var nodes  = Map[NodeId, NodeEntryImpl]()

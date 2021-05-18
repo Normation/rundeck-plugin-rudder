@@ -17,11 +17,6 @@
 package com.normation.rundeck.plugin.resources.rudder;
 
 import java.util.Properties
-
-import scala.Left
-import scala.Right
-import scala.collection.JavaConverters
-
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
 import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
@@ -29,8 +24,7 @@ import com.dtolabs.rundeck.core.plugins.configuration.Describable
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
-
-import org.apache.log4j.Logger
+import org.slf4j.LoggerFactory
 
 
 /**
@@ -51,7 +45,7 @@ import org.apache.log4j.Logger
 @Plugin(name = "rudder", service = "ResourceModelSource")
 class RudderResourceModelSourceFactory(framework: Framework) extends ResourceModelSourceFactory with Describable {
 
-  private[this] lazy val logger = Logger.getLogger(this.getClass)
+  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   /**
    * Try to create a new Rudder resource from a set of properties.
@@ -121,8 +115,8 @@ object RudderResourceModelSourceFactory {
     .property(PropertyUtil.string(RUDDER_BASE_URL, "Rudder base URL"
       , "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
     .property(PropertyUtil.select(API_VERSION, "API version"
-      , "The API version to use for rundeck. For Rudder 2.11 or 3.0, use '4', for more recent version use '6'", true
-      , "latest", Seq("6", "4").asJava))
+      , "The API version to use for rundeck. For Rudder up to 5.0 use '6', for more recent version use '12'", true
+      , "latest", Seq("12", "6").asJava))
     .property(PropertyUtil.string(API_TOKEN, "API token"
       , "The API token to use for rundeck, defined in Rudder API administration page", true, null))
     .property(PropertyUtil.integer(API_TIMEOUT, "API timeout"
@@ -170,9 +164,9 @@ object RudderResourceModelSourceFactory {
       apiVersion <- getProp(API_VERSION).fold(
                       Left(_)
                     , x => x match {
-                        case "4" => Right(ApiV4)
-                        case "6" => Right(ApiV6)
-                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '4' and '6'"))
+                        case "6"  => Right(ApiV6)
+                        case "12" => Right(ApiV12)
+                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '12'"))
                     }).right
     } yield {
       val envVarSSLPort = getProp(ENV_VARIABLE_SSH_PORT).fold(_ => None, x => Some(x))

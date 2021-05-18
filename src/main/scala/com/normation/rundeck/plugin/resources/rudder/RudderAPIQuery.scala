@@ -21,7 +21,6 @@ import rapture.core.timeSystems.numeric
 import rapture.io._
 import rapture.net._
 import rapture.json._
-import rapture.codec.encodings.`UTF-8`
 import rapture.json.jsonBackends.jackson._
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
@@ -66,8 +65,7 @@ object RudderAPIQuery {
    */
   def queryNodes(config: Configuration): Failable[Map[NodeId,NodeEntryImpl]] = {
     config.url.version match {
-      case ApiV4 => queryNodesV4(config)
-      case ApiV6 => queryNodesDetails(config, config.url.nodesApi)
+      case ApiV12 => queryNodesDetails(config, config.url.nodesApi)
     }
   }
 

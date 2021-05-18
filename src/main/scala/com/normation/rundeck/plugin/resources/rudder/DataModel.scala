@@ -31,16 +31,16 @@ package com.normation.rundeck.plugin.resources.rudder
 //////////////////////////////// Configuration of the plugin ////////////////////////////////
 
 sealed trait ApiVersion { def value: String }
-case object ApiV4 extends ApiVersion { val value = "4" }
 
 /*
- * Rationnal to not use "latest" in place of 6.
- * If you use latest with Rudder 2.11/3.0, you
+ * Rationnal to not use "latest" in place of 12.
+ * If you use latest with Rudder 4.x, you
  * will have a clear error, nothing works => change version.
  * Auto API upgrade are not relevant, since the plugin won't
  * take advantage of them without an update.
  */
-case object ApiV6 extends ApiVersion { val value = "6" }
+case object ApiV6  extends ApiVersion { val value = "6"  }
+case object ApiV12 extends ApiVersion { val value = "12" }
 
 
 /*
@@ -55,7 +55,7 @@ final case class RudderUrl(baseUrl: String, version: ApiVersion) {
   // endpoint for groups API (only need all of them)
   def groupsApi = s"${url}/api/latest/groups"
 
-  // endpoint for nodes API - all of them, of just one
+  // endpoint for nodes API - all of them, or just one
   def nodesApi = s"${url}/api/${version.value}/nodes"
   def nodeApi(id: NodeId) = nodesApi + "/" + id.value
 
