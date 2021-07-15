@@ -65,6 +65,7 @@ object RudderAPIQuery {
    */
   def queryNodes(config: Configuration): Failable[Map[NodeId,NodeEntryImpl]] = {
     config.url.version match {
+      case ApiV6  => queryNodesDetails(config, config.url.nodesApi)
       case ApiV12 => queryNodesDetails(config, config.url.nodesApi)
     }
   }
