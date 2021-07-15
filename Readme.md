@@ -19,7 +19,10 @@ Put the `rundeck-rudder-nodes-plugin-X.Y.jar` into your `$RDECK_BASE/libext` dir
 
 Alternatively, you can build the project from source with Maven (mvn install) and get the
 resulting jar from your local repository (see Maven console output for exact location).
-It is old and it will need a JDK 1.8.
+
+
+
+> **_NOTE:_**: It is old and builds needs a JDK 1.8.x
 
 
 Usage
