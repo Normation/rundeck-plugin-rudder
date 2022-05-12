@@ -1,7 +1,7 @@
 Rundeck Rudder Nodes Plugin
 ===========================
 
-Version: 2.0
+Version: 2.1
 
 This is a Resource Model Source plugin for [RunDeck][] 3.3.x that provides
 Rudder node as nodes for the RunDeck server.
@@ -60,3 +60,11 @@ which can be done in either of a few ways:
 Next, you will have to configure user and SSH port to use for Rundeck connection. For that, you can configure default values in the plugin
 properties, and optionaly, an environment variable name whose value can be use on a per-node basis.
 
+
+Release notes
+-------------
+
+2.1: update to rundeck-core version 3.3.18-20220118 (multiple vulnerabilities fixes)
+2.0: add support for Rudder 6.x. Update to rundeck-core version 3.3 
+
+1.x: support for Rudder < 6.0
