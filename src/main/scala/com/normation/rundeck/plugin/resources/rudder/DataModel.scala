@@ -39,10 +39,8 @@ sealed trait ApiVersion { def value: String }
  * Auto API upgrade are not relevant, since the plugin won't
  * take advantage of them without an update.
  */
-case object ApiV6  extends ApiVersion { val value = "6"  }
 case object ApiV12 extends ApiVersion { val value = "12" }
-case object ApiV18 extends ApiVersion { val value = "18" }
-
+case object ApiLatest extends ApiVersion { val value = "latest" }
 
 /*
  * Rudder base URL, for ex: https://my.company.com/rudder/

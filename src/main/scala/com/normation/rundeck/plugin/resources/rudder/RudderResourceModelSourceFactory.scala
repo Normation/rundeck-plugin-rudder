@@ -115,8 +115,8 @@ object RudderResourceModelSourceFactory {
     .property(PropertyUtil.string(RUDDER_BASE_URL, "Rudder base URL"
       , "The URL to access to your Rudder, for ex.: 'https://my.company.com/rudder/'", true, null))
     .property(PropertyUtil.select(API_VERSION, "API version"
-      , "The API version to use for rundeck. For Rudder up to 5.0 use '6', for more recent version use '18'", true
-      , "latest", Seq("18", "12", "6").asJava))
+      , "The API version to use for rundeck. You should use 'latest' appart for compat with older Rudder up to 7.x where version should be '12'", true
+      , "latest", Seq("latest", "12").asJava))
     .property(PropertyUtil.string(API_TOKEN, "API token"
       , "The API token to use for rundeck, defined in Rudder API administration page", true, null))
     .property(PropertyUtil.integer(API_TIMEOUT, "API timeout"
@@ -164,10 +164,9 @@ object RudderResourceModelSourceFactory {
       apiVersion <- getProp(API_VERSION).fold(
                       Left(_)
                     , x => x match {
-                        case "6"  => Right(ApiV6)
                         case "12" => Right(ApiV12)
-                        case "18" => Right(ApiV18)
-                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '18'"))
+                        case "latest" => Right(ApiLatest)
+                        case _ => Left(ErrorMsg(s"The API version '${x}' is not authorized, only accepting '12' or 'latest'"))
                     }).right
     } yield {
       val envVarSSLPort = getProp(ENV_VARIABLE_SSH_PORT).fold(_ => None, x => Some(x))
