@@ -67,6 +67,7 @@ object RudderAPIQuery {
     config.url.version match {
       case ApiV6  => queryNodesDetails(config, config.url.nodesApi)
       case ApiV12 => queryNodesDetails(config, config.url.nodesApi)
+      case ApiV18 => queryNodesDetails(config, config.url.nodesApi)
     }
   }
 

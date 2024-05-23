@@ -41,6 +41,7 @@ sealed trait ApiVersion { def value: String }
  */
 case object ApiV6  extends ApiVersion { val value = "6"  }
 case object ApiV12 extends ApiVersion { val value = "12" }
+case object ApiV18 extends ApiVersion { val value = "18" }
 
 
 /*

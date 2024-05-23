@@ -64,6 +64,7 @@ properties, and optionaly, an environment variable name whose value can be use o
 Release notes
 -------------
 
+2.2: add support for Rudder 8.x.
 2.1: update to rundeck-core version 3.3.18-20220118 (multiple vulnerabilities fixes)
 2.0: add support for Rudder 6.x. Update to rundeck-core version 3.3 
 
