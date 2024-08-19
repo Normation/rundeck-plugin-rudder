@@ -216,7 +216,7 @@ object RudderAPIQuery {
       node.setOsVersion(json.os.version.as[String])
       node.setUsername(rundeckUser)
       node.getAttributes().put("rudder_information:id", id.value)
-      node.getAttributes().put("rudder_information:node_direct_URL", config.url.nodeUrl(id))
+      node.getAttributes().put("rudder_information:node_direct_url", config.url.nodeUrl(id))
       node.getAttributes().put("rudder_information:policy_server_id", json.policyServerId.as[String])
       node.getAttributes().put("rudder_information:last_inventory_date", json.lastInventoryDate.as[String])
       node.getAttributes().put("rudder_information:node_status", json.status.as[String])
@@ -227,8 +227,8 @@ object RudderAPIQuery {
       import modes.returnTry
 
       json.os.fullName.as[String].foreach( node.setDescription )
-      json.ram.as[Int].foreach { x => node.getAttributes().put("total_RAM", x.toString) }
-      json.ipAddresses.as[List[String]].foreach { x => node.getAttributes().put("IP_Addresses", x.mkString(", ")) }
+      json.ram.as[Int].foreach { x => node.getAttributes().put("total_ram", x.toString) }
+      json.ipAddresses.as[List[String]].foreach { x => node.getAttributes().put("ip_addresses", x.mkString(", ")) }
 
       //rudder properties
       case class JsonRudderProp(name: String, value: String)
@@ -251,7 +251,7 @@ object RudderAPIQuery {
       json.networkInterfaces.as[Seq[Map[String, Json]]].foreach { _.foreach { case j =>
         j("name").as[String].foreach { name =>
           j("ipAddresses").as[Seq[String]].foreach { ips =>
-            node.getAttributes().put(s"rudder_network_interface:${name}:IP_addresses", ips.mkString(", "))
+            node.getAttributes().put(s"rudder_network_interface:${name}:ip_addresses", ips.mkString(", "))
           }
           j.filterKeys { k => k != "name" && k != "ipAddresses" }.foreach { case (k,v) =>
             v.as[String].orElse(v.as[Int]).orElse(v.as[Boolean]).foreach { value =>
