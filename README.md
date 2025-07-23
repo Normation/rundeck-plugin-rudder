@@ -1,12 +1,9 @@
 Rundeck Rudder Nodes Plugin
 ===========================
 
-Version: 2.3
+This is a Resource Model Source plugin for [Rundeck][] 3.3.x and up that provides Rudder nodes as nodes for the Rundeck server.
 
-This is a Resource Model Source plugin for [Rundeck][] 3.3.x and up that provides
-Rudder nodes as nodes for the Rundeck server.
-
-[Rundeck]: http://rundeck.org
+[Rundeck]: https://www.rundeck.com/
 
 It works with Rudder standard API v12 for Rudder 6.x and up.
 
@@ -138,20 +135,4 @@ You can now run jobs and commands on your imported Rudder nodes like you would o
 If the execution succeeds on all your nodes, you're all set !
 
 ![Executing the job on the Rudder nodes](readme-resources/usage.png)
-
-
-Release notes
--------------
-
-2.3: normalize node attribute names
-
-2.2: add support for Rudder 8.x.
-
-2.1: update to rundeck-core version 3.3.18-20220118 (multiple vulnerabilities fixes)
-
-2.0: add support for Rudder 6.x. Update to rundeck-core version 3.3 
-
-1.x: support for Rudder < 6.0
-
-
 
