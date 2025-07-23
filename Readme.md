@@ -46,7 +46,7 @@ Firstly, generate a new SSH key if needed. Then, in the Rudder interface, select
 
 ![Directives page](readme-resources/ssh_1.png)
 
-In the Directives tree, find the **SSH Authorised Keys** technique (under **System Settings** > **Remote access**). Click the "Create" button.
+In the Directives tree, find the **SSH Authorised Keys** technique (under **System Settings** > **Remote access**). Click the **Create** button.
 
 ![Find the "SSH Authorised Keys" technique](readme-resources/ssh_2.png)
 
@@ -85,7 +85,7 @@ In the Rudder interface, select **Users & access** > **API accounts** in the sid
 
 ![Navigate to the API accounts page](readme-resources/token_1.png)
 
-Click the **Create an account** button. Choose a fitting name for the token, and under **Access level**, choose "Custom ACL".
+Click the **Create an account** button. Choose a fitting name for the token, and under **Access level**, choose "Custom ACL" from the drop-down menu.
 
 ![Creating a new API account](readme-resources/token_2.png)
 
@@ -95,7 +95,7 @@ The only required rights are `GET groups` and `GET nodes`. Select them both.
 
 ![Select the "GET nodes" authorization](readme-resources/token_4.png)
 
-After you click "Save", the token value will be displayed. Write it down as this token will be needed in the next step. 
+After you click **Save**, the token value will be displayed. Write it down as this token will be needed in the next step. 
 
 
 Importing your Rudder nodes into Rundeck
@@ -105,11 +105,11 @@ We can now import our Rudder nodes into Rundeck. In the Rundeck interface, selec
 
 ![Navigating to the Edit Nodes menu](readme-resources/importing_1.png)
 
-In the "Nodes" menu, click the "Add a new Node Source" button.
+In the **Nodes** menu, click the **Add a new Node Source** button.
 
 ![Adding a new node source](readme-resources/importing_2.png)
 
-Select the "Rudder Resources" option.
+Select the **Rudder Resources** option.
 ![Adding a new Rudder Resource](readme-resources/importing_3.png)
 
 You can now configure your Rudder node source :
@@ -119,7 +119,7 @@ You can now configure your Rudder node source :
 
 ![Configuring the new Rudder Resource](readme-resources/importing_4.png)
 
-After saving your changes, your Rudder nodes should now be listed alongside your existing nodes when you navigate to the "Nodes" page. 
+After saving your changes, your Rudder nodes should now be listed alongside your existing nodes when you navigate to the **Nodes** page. 
 
 > **_NOTE:_** The Rudder Groups your nodes are in will be imported as Tags in Rundeck.
 
