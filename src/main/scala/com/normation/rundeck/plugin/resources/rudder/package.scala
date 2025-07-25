@@ -19,26 +19,31 @@ package com.normation.rundeck.plugin.resources
 package object rudder {
 
   /**
-   * Just a shorthand for our "that method can
-   * fail, so Either it returns an error, or the
-   * actual type you were looking for" type.
+   * Just a shorthand for our "that method can fail, so Either it returns an
+   * error, or the actual type you were looking for" type.
    */
   type Failable[T] = Either[ErrorMsg, T]
 
   /**
-   * We also define a monadic traversal of a sequence of
-   * Failable things for simplicity.
+   * We also define a monadic traversal of a sequence of Failable things for
+   * simplicity.
    */
+  /*
   object Traverse {
-    def apply[T,U](seq: Seq[T])(f: T => Either[ErrorMsg,U]): Failable[Seq[U]] = {
+    def apply[T, U](
+        seq: Seq[T]
+    )(f: T => Either[ErrorMsg, U]): Failable[Seq[U]] = {
 
-    //that's clearly not the canonical way of doing it!
-    //(simplest way to avoid stack overflow)
+      // that's clearly not the canonical way of doing it!
+      // (simplest way to avoid stack overflow)
 
-      Right(seq.map { x => f(x) match {
-        case Right(y) => y
-        case Left(msg) => return Left(msg)
-      }})
+      Right(seq.map { x =>
+        f(x) match {
+          case Right(y)  => y
+          case Left(msg) => return Left(msg)
+        }
+      })
     }
   }
+   */
 }

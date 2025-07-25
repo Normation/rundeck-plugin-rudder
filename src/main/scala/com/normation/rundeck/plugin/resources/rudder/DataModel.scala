@@ -16,17 +16,14 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
-
 /**
- * This file contains data structure definition
- * for our model.
+ * This file contains data structure definition for our model.
  *
  * There is mainly:
- * - things related to the configuration of the module
- * - what is a node / a group
- * - our error container class
+ *   - things related to the configuration of the module
+ *   - what is a node / a group
+ *   - our error container class
  */
-
 
 //////////////////////////////// Configuration of the plugin ////////////////////////////////
 
@@ -49,17 +46,21 @@ case object ApiLatest extends ApiVersion { val value = "latest" }
  */
 final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
-  private[this] val url = if(baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.size - 1) else baseUrl
+  private[this] val url = {
+    if (baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.length - 1)
+    else baseUrl
+  }
 
   // endpoint for groups API (only need all of them)
   def groupsApi = s"${url}/api/latest/groups"
 
   // endpoint for nodes API - all of them, or just one
   def nodesApi = s"${url}/api/${version.value}/nodes"
-  def nodeApi(id: NodeId) = nodesApi + "/" + id.value
+  def nodeApi(id: NodeId): String = nodesApi + "/" + id.value
 
   // node details on Rudder web UI
-  def nodeUrl(id: NodeId) =  s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
+  def nodeUrl(id: NodeId) =
+    s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
 }
 
 /*
@@ -77,19 +78,18 @@ final case class TimeoutInterval(secondes: Int) {
  * Of course, values can't be null here
  */
 final case class Configuration(
-    url               : RudderUrl
-  , apiToken          : String
-  , apiTimeout        : TimeoutInterval
-  , checkCertificate  : Boolean
-  , refreshInterval   : TimeoutInterval //time in ms, should never be < 5000ms
-  , sshDefaultPort    : Int
-  , envVarSSLPort     : Option[String]
-  , rundeckDefaultUser: String
-  , envVarRundeckUser : Option[String]
+    url: RudderUrl,
+    apiToken: String,
+    apiTimeout: TimeoutInterval,
+    checkCertificate: Boolean,
+    refreshInterval: TimeoutInterval, // time in ms, should never be < 5000ms
+    sshDefaultPort: Int,
+    envVarSSLPort: Option[String],
+    rundeckDefaultUser: String,
+    envVarRundeckUser: Option[String]
 )
 
 //////////////////////////////// Nodes and Groups ////////////////////////////////
-
 
 //Rudder node ID, used as key to synchro nodes
 final case class NodeId(value: String)
@@ -102,21 +102,20 @@ final case class NodeId(value: String)
 final case class GroupId(value: String)
 
 final case class Group(
-    id     : GroupId
-  , name   : String
-  , nodeIds: Set[NodeId]
-  , enable : Boolean
-  , dynamic: Boolean
+    id: GroupId,
+    name: String,
+    nodeIds: Set[NodeId],
+    enable: Boolean,
+    dynamic: Boolean
 )
 
 //////////////////////////////// Error container ////////////////////////////////
 
 /**
  * All the method that can fail are of the Failable[T] type (defined in
- * package.scala, alias to Either[ErrorMsg,T]).
- * ErrorMsg is just a container for an Error, with an human readable
- * message, and optionnaly the root exception which caused it.
+ * package.scala, alias to Either[ErrorMsg,T]). ErrorMsg is just a container for
+ * an Error, with an human readable message, and optionnaly the root exception
+ * which caused it.
  */
 
 final case class ErrorMsg(value: String, exception: Option[Throwable] = None)
-
