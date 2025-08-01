@@ -6,13 +6,9 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Java & Scala CI with Maven
+name: CI with Maven
 
-on:
-  pull_request:
-    branches:
-      - master
-      - '*/*'
+on: [push, pull_request]
 
 jobs:
   build:
@@ -21,16 +17,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Set up JDK 11
+      - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
-      - name: Set up Scala 3
-        uses: olafurpg/setup-scala@v11
-        with:
-          java-version: openjdk@1.11.0
       - name: Build with Maven
         run: mvn --batch-mode package --file pom.xml
 
