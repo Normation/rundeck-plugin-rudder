@@ -17,29 +17,13 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-    <logback-version>1.1.2</logback-version>
-    <scala-maven-plugin-version>3.2.1</scala-maven-plugin-version>
-    <sbv>2.11</sbv>
-    <scala-version>${sbv}.7</scala-version>
-    <jodatime-version>2.3</jodatime-version>
-    <specs2-version>2.3.12</specs2-version>
-    <commons-codec-version>1.9</commons-codec-version>
-    <commons-lang-version>2.6</commons-lang-version>
-    <slf4j-version>1.7.7</slf4j-version>
-    <commons-io-version>2.4</commons-io-version>
-    <cglib-version>3.1</cglib-version>
-    <rundeck-version>3.3.18-20220118</rundeck-version>
+    <scala-maven-plugin-version>4.9.5</scala-maven-plugin-version>
+    <sbv>3.7</sbv>
+    <scala-version>${sbv}.1</scala-version>
+    <rundeck-version>4.0.0-20220322</rundeck-version>
   </properties>
   <build>
     <plugins>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>2.3.2</version>
-        <configuration>
-          <source>1.8</source>
-          <target>1.8</target>
-        </configuration>
-      </plugin>
        <plugin>
         <groupId>net.alchim31.maven</groupId>
         <artifactId>scala-maven-plugin</artifactId>
@@ -62,11 +46,8 @@
           </execution>
         </executions>
         <configuration>
-          <scalaCompatVersion>${sbv}</scalaCompatVersion>
           <args>
-            <arg>-target:jvm-1.7</arg>
-            <arg>-dependencyfile</arg>
-            <arg>${basedir}/.scala_dependencies</arg>
+            <arg>-release:11</arg>
           </args>
           <jvmArgs>
             <jvmArg>-server</jvmArg>
@@ -75,7 +56,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-assembly-plugin</artifactId>
-        <version>2.2.2</version>
+        <version>3.7.1</version>
         <executions>
           <execution>
             <id>make-assembly</id>
@@ -92,66 +73,68 @@
           </descriptors>
           <archive>
             <manifestEntries>
-              <Rundeck-Plugin-Version>1.1</Rundeck-Plugin-Version>
+              <Rundeck-Plugin-Version>1.2</Rundeck-Plugin-Version>
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-xml_${sbv} lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl lib/rapture-core_${sbv} lib/rapture-codec_${sbv} lib/rapture-cryto_${sbv} lib/rapture-data_${sbv} lib/rapture-io_${sbv} lib/rapture-json_${sbv} lib/rapture-json-jackson_${sbv} lib/rapture-mime_${sbv} lib/rapture-net_${sbv} lib/rapture-uri_${sbv}</Rundeck-Plugin-Libs>
+              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-xml_${sbv} lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl </Rundeck-Plugin-Libs>
             </manifestEntries>
           </archive>
         </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-release-plugin</artifactId>
-        <version>2.5.2</version>
+        <version>3.1.1</version>
       </plugin>
-    </plugins>
-    <pluginManagement>
-    <plugins>
       <plugin>
-        <groupId>org.eclipse.m2e</groupId>
-        <artifactId>lifecycle-mapping</artifactId>
-        <version>1.0.0</version>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <minimizeJar>true</minimizeJar>
+            </configuration>
+          </execution>
+        </executions>
         <configuration>
-          <lifecycleMappingMetadata>
-            <pluginExecutions>
-              <pluginExecution>
-                <pluginExecutionFilter>
-                  <groupId>org.zeroturnaround</groupId>
-                  <artifactId>jrebel-maven-plugin</artifactId>
-                  <versionRange>[0.1,)</versionRange>
-                  <goals>
-                    <goal>generate</goal>
-                  </goals>
-                </pluginExecutionFilter>
-                <action>
-                  <execute/>
-                </action>
-              </pluginExecution>
-              <pluginExecution>
-                <pluginExecutionFilter>
-                  <groupId>net.alchim31.maven</groupId>
-                  <artifactId>scala-maven-plugin</artifactId>
-                  <versionRange>[0.1,)</versionRange>
-                  <goals>
-                    <goal>add-source</goal>
-                    <goal>compile</goal>
-                    <goal>testCompile</goal>
-                  </goals>
-                </pluginExecutionFilter>
-                <action>
-                  <configurator>
-                    <id>org.maven.ide.eclipse.scala</id>
-                  </configurator>
-                </action>
-              </pluginExecution>
-            </pluginExecutions>
-          </lifecycleMappingMetadata>
+          <outputDirectory>${project.build.directory}/original</outputDirectory>
+          <createDependencyReducedPom>false</createDependencyReducedPom>
+          <filters>
+            <filter>
+              <artifact>org.scala-lang:scala-library</artifact>
+              <excludes>
+                <exclude>META-INF/**</exclude>
+                <exclude>scala/**</exclude>
+              </excludes>
+            </filter>
+            <filter>
+              <artifact>org.scala-lang:scala3-library_3</artifact>
+              <excludes>
+                <exclude>META-INF/**</exclude>
+              </excludes>
+              <includes>
+                <include>scala/deriving/**</include>
+                <include>scala/runtime/**</include>
+              </includes>
+            </filter>
+            <filter>
+              <artifact>org.rundeck-plugins:rundeck-rudder-nodes-plugin</artifact>
+              <includes>
+                <include>com/**</include>
+                <include>lib/**</include>
+                <include>META-INF/**</include>
+              </includes>
+            </filter>
+          </filters>
         </configuration>
       </plugin>
     </plugins>
-    </pluginManagement>
-    </build>
+  </build>
   <dependencies>
     <dependency>
       <groupId>org.rundeck</groupId>
@@ -161,60 +144,8 @@
     </dependency>
     <dependency>
       <groupId>org.scala-lang</groupId>
-      <artifactId>scala-library</artifactId>
+      <artifactId>scala3-library_3</artifactId>
       <version>${scala-version}</version>
     </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-core_${sbv}</artifactId>
-      <version>1.0.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-io_${sbv}</artifactId>
-      <version>0.10.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-uri_${sbv}</artifactId>
-      <version>1.0.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-net_${sbv}</artifactId>
-      <version>0.10.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-json_${sbv}</artifactId>
-      <version>1.0.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.propensive</groupId>
-      <artifactId>rapture-json-jackson_${sbv}</artifactId>
-      <version>1.0.0</version>
-    </dependency>
-
-<!--     <dependency> -->
-<!--       <groupId>org.apache.httpcomponents</groupId> -->
-<!--       <artifactId>httpclient</artifactId> -->
-<!--       <version>4.5</version> -->
-<!--     </dependency>   -->
-<!--     <dependency> -->
-<!--       <groupId>org.slf4j</groupId> -->
-<!--       <artifactId>slf4j-nop</artifactId> -->
-<!--       <version>${slf4j-version}</version> -->
-<!--       <scope>compile</scope> -->
-<!--     </dependency> -->
-<!--     <dependency> -->
-<!--       <groupId>com.amazonaws</groupId> -->
-<!--       <artifactId>aws-java-sdk-ec2</artifactId> -->
-<!--       <version>1.9.0</version> -->
-<!--     </dependency> -->
-<!--     <dependency> -->
-<!--       <groupId>org.json4s</groupId> -->
-<!--       <artifactId>json4s-native_${sbv}</artifactId> -->
-<!--       <version>3.2.11</version> -->
-<!--     </dependency>     -->
   </dependencies>
 </project>
