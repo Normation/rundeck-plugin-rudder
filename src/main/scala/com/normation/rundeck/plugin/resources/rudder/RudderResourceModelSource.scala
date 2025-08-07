@@ -23,6 +23,7 @@ import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
+import zio.Unsafe
 
 /**
  * This is the entry point for one Rudder provisionning. It is responsible for
@@ -33,13 +34,13 @@ import org.slf4j.LoggerFactory
 class RudderResourceModelSource(val configuration: Configuration)
     extends ResourceModelSource {
 
-  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
+  private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   // we are locally caching nodes and groups instances.
-  private[this] var nodes = Map[NodeId, NodeEntryImpl]()
+  private var nodes = Map[NodeId, NodeEntryImpl]()
 
   // last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
-  private[this] var lastUpdateTime = 0L
+  private var lastUpdateTime = 0L
 
   /**
    * This is the actual, only integration point with Rundeck. The logic is to
@@ -47,7 +48,7 @@ class RudderResourceModelSource(val configuration: Configuration)
    * on v4 API)
    */
   @throws(classOf[ResourceModelSourceException])
-  override def getNodes(): INodeSet = {
+  override def getNodes: INodeSet = {
     // update nodes and groups if needed
 
     logger.debug("Getting nodes from Rudder")
@@ -63,7 +64,7 @@ class RudderResourceModelSource(val configuration: Configuration)
   /**
    * Update the local node cache is needed
    */
-  def updateNodesAndGroups(): Unit = {
+  private def updateNodesAndGroups(): Unit = {
     val now = System.currentTimeMillis()
 
     if (this.lastUpdateTime + configuration.refreshInterval.ms < now) {
@@ -93,22 +94,24 @@ class RudderResourceModelSource(val configuration: Configuration)
   }
 
   /**
-   * This method unconditionnaly get new nodes from Rudder. It builds a the
-   * resulting rundeck nodes, and in particular add groups as tag
+   * This method unconditionally gets new nodes from Rudder. It builds the
+   * corresponding Rundeck nodes, and adds the Rudder groups as tags.
    */
-  def getNodesFromRudder(
+  private def getNodesFromRudder(
       config: Configuration
   ): Failable[Map[NodeId, NodeEntryImpl]] = {
 
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
-      groups <- Right(
-        Seq.empty[Group]
-      ) // RudderAPIQuery.queryGroups(config).right
-      newNodes <- Right(
-        Map.empty[NodeId, NodeEntryImpl]
-      ) // RudderAPIQuery.queryNodes(config).right
+      groups <- Right(Seq.empty[Group])
+      newNodes = Unsafe.unsafe { implicit unsafe =>
+        zio.Runtime.unsafe
+          .fromLayer(zio.http.Client.default)
+          .unsafe
+          .run(RudderAPIQuery.queryNodes(config))
+          .getOrElse(Map.empty)
+      }
     } yield {
       import scala.jdk.CollectionConverters._
       val groupByNode = getGroupForNode(groups)
@@ -127,7 +130,7 @@ class RudderResourceModelSource(val configuration: Configuration)
     }
   }
 
-  private[this] def getGroupForNode(
+  private def getGroupForNode(
       groups: Seq[Group]
   ): Map[NodeId, Seq[Group]] = {
     // group groups by nodes id.

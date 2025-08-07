@@ -46,7 +46,7 @@ case object ApiLatest extends ApiVersion { val value = "latest" }
  */
 final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
-  private[this] val url = {
+  private val url = {
     if (baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.length - 1)
     else baseUrl
   }

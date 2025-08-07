@@ -77,7 +77,7 @@
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-reflect lib/scala-xml_${sbv} lib/scala-parser-combinators_${sbv} lib/commons-net lib/jackson-core-asl lib/jackson-mapper-asl </Rundeck-Plugin-Libs>
+              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-collection-compat_3 lib/scala-library_3 lib/zio-http_3 lib/zio_3 lib/zio-stacktracer_3 lib/zio-internal-macros-3 lib/zio-schema_3 lib/izumi-reflect_3 lib/izumi-reflect-thirdparty-boopickle-shaded_3 lib/netty-transport-native-unix-common lib/netty-transport-native-kqueue lib/netty-transport-native-epoll lib/netty-transport-classes-kqueue lib/netty-transport-classes-epoll lib/netty-transport lib/netty-resolver lib/netty-pkitesting lib/netty-handler-proxy lib/netty-handler lib/netty-common lib/netty-codec-socks lib/netty-codec-http lib/netty-codec-compression lib/netty-codec-base lib/netty-buffer lib/zio-prelude_3</Rundeck-Plugin-Libs>
             </manifestEntries>
           </archive>
         </configuration>
@@ -104,30 +104,56 @@
         <configuration>
           <outputDirectory>${project.build.directory}/original</outputDirectory>
           <createDependencyReducedPom>false</createDependencyReducedPom>
+          <minimizeJar>true</minimizeJar>
+          <artifactSet>
+            <excludes>
+              <exclude>com.lihaoyi:*</exclude>
+              <exclude>com.softwaremill.magnolia1_3:*</exclude>
+              <exclude>io.netty:*</exclude>
+              <exclude>org.bouncycastle:*</exclude>
+              <exclude>dev.zio:zio-streams*</exclude>
+              <exclude>dev.zio:izumi*</exclude>
+            </excludes>
+          </artifactSet>
           <filters>
             <filter>
-              <artifact>org.scala-lang:scala-library</artifact>
-              <excludes>
-                <exclude>META-INF/**</exclude>
-                <exclude>scala/**</exclude>
-              </excludes>
+              <artifact>dev.zio:*</artifact>
+              <includes>
+                <include>zio/Runtime*</include>
+                <include>zio/prelude/*</include>
+                <include>zio/schema/internal/SourceLocation*</include>
+                <include>zio/http/Header*</include>
+              </includes>
             </filter>
             <filter>
-              <artifact>org.scala-lang:scala3-library_3</artifact>
-              <excludes>
-                <exclude>META-INF/**</exclude>
-              </excludes>
+              <artifact>org.scala-lang:*</artifact>
               <includes>
-                <include>scala/deriving/**</include>
-                <include>scala/runtime/**</include>
+                <include>scala/runtime/function/*</include>
+                <include>scala/runtime/LazyVals*</include>
+                <include>scala/deriving/*</include>
+                <include>scala/quoted/ToExpr*</include>
               </includes>
+            </filter>
+            <filter>
+              <artifact>org.scala-lang.modules:*</artifact>
+              <excludes><exclude>**</exclude></excludes>
             </filter>
             <filter>
               <artifact>org.rundeck-plugins:rundeck-rudder-nodes-plugin</artifact>
               <includes>
                 <include>com/**</include>
-                <include>lib/**</include>
-                <include>META-INF/**</include>
+                <include>lib/scala*</include>
+                <include>lib/zio-http_3</include>
+                <include>lib/zio_3</include>
+                <include>lib/zio-prelude_3</include>
+                <include>lib/zio-stacktracer_3</include>
+                <include>lib/zio-internal-macros_3</include>
+                <include>lib/zio-schema_3</include>
+                <include>lib/izumi-reflect_3</include>
+                <include>lib/izumi-reflect-thirdparty-boopickle-shaded_3</include>
+                <include>lib/netty*</include>
+                <include>META-INF/MANIFEST.MF</include>
+                <include>*</include>
               </includes>
             </filter>
           </filters>
@@ -146,6 +172,16 @@
       <groupId>org.scala-lang</groupId>
       <artifactId>scala3-library_3</artifactId>
       <version>${scala-version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.zio</groupId>
+      <artifactId>zio_3</artifactId>
+      <version>2.1.20</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.zio</groupId>
+      <artifactId>zio-http_3</artifactId>
+      <version>3.3.3</version>
     </dependency>
   </dependencies>
 </project>

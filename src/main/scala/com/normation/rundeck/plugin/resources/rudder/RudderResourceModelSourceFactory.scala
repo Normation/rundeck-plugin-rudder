@@ -46,7 +46,7 @@ class RudderResourceModelSourceFactory(framework: Framework)
     extends ResourceModelSourceFactory
     with Describable {
 
-  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
+  private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   /**
    * Try to create a new Rudder resource from a set of properties. Report errors
