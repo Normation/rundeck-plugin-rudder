@@ -17,10 +17,12 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
-import zio.http.Header.ContentTransferEncoding.XToken
 import zio.{Chunk, ZIO}
-import zio.http.{Client, Headers, QueryParams, Request, URL}
+import zio.http.{Client, FormField, Headers, QueryParams, Request, Status, URL}
 import zio.http.Method.GET
+import zio.json.{DeriveJsonEncoder, JsonDecoder}
+import zio.json.DecoderOps
+import zio.schema.{DeriveSchema, Schema}
 
 /**
  * This file manages the REST query logic. This is where queries to the Rudder
@@ -61,31 +63,43 @@ object RudderAPIQuery {
   def queryNodes(
       config: Configuration
   ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] = {
+
     val queryUrl = config.url.nodesApi
     val fullUrl =
       URL.decode(queryUrl + QueryParams(topic -> params).encode).toOption.get
+    val headers = Headers(("X-API-Token" -> config.apiToken))
+    println(fullUrl.path.encode)
 
-    ZIO
-      .scoped {
-        Client
-          .streaming(
-            Request(
-              method = GET,
-              url = fullUrl,
-              headers = Headers.fromIterable(Iterable(XToken(config.apiToken)))
-            )
-          )
-          .flatMap(_.body.asString)
-      }
+    val request = Request(method = GET, url = fullUrl, headers = headers)
+
+    Client
+      .batched(request)
       .mapError(ex => {
         ErrorMsg(
           s"Error when trying to get node(s) at url ${fullUrl.encode}: " + ex.getMessage,
           Some(ex)
         )
       })
-      .map(body =>
-        Map.apply(NodeId("tmp_id") -> NodeEntryImpl("tmp.node.name"))
-      )
+      .debug
+      .flatMap(response => {
+        response.status match
+          case informational: Status.Informational => ???
+          case success: Status.Success             =>
+            response.body.asString.debug.orDie
+          case redirection: Status.Redirection     => ???
+          case error: Status.Error                 => ???
+          case Status.Custom(code, reasonPhrase)   => ???
+      })
+      .flatMap(body => {
+        body.fromJson[RudderNodeResponse] match
+          case Left(errMsg)    => ZIO.fail(ErrorMsg(errMsg, None))
+          case Right(nodeList) =>
+            ZIO.succeed(
+              nodeList.data.nodes
+                .map(node => (NodeId(node.id), extractNode(node, config)))
+                .toMap
+            )
+      })
 
   }
 
@@ -112,9 +126,41 @@ object RudderAPIQuery {
    * state of the plugin).
    */
   def extractNode(
-      json: Any,
+      rudderNode: Node,
       config: Configuration
-  ): Failable[(NodeId, NodeEntryImpl)] = {
-    ???
+  ): NodeEntryImpl = {
+
+    val rundeckUser =
+      config.envVarRundeckUser.getOrElse(config.rundeckDefaultUser)
+
+    val node = NodeEntryImpl()
+
+    node.setNodename(rudderNode.hostname)
+    node.setHostname(rudderNode.hostname)
+    node.setOsName(rudderNode.os.name)
+    node.setOsFamily(rudderNode.os.`type`)
+    node.setOsArch(rudderNode.architectureDescription)
+    node.setOsVersion(rudderNode.os.version)
+    node.setUsername(rundeckUser)
+    node.getAttributes.put("rudder_information:id", rudderNode.id)
+    node.getAttributes
+      .put(
+        "rudder_information:node_direct_url",
+        config.url.nodeUrl(NodeId(rudderNode.id))
+      )
+    node.getAttributes
+      .put(
+        "rudder_information:policy_server_id",
+        rudderNode.policyServerId
+      )
+    node.getAttributes
+      .put(
+        "rudder_information:last_inventory_date",
+        rudderNode.lastInventoryDate
+      )
+    node.getAttributes
+      .put("rudder_information:node_status", rudderNode.status)
+
+    node
   }
 }
