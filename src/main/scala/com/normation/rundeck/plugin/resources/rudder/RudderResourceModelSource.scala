@@ -23,7 +23,8 @@ import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
-import zio.Unsafe
+import zio.http.Client
+import zio.{IO, UIO, Unsafe, ZIO}
 
 /**
  * This is the entry point for one Rudder provisionning. It is responsible for
@@ -52,7 +53,7 @@ class RudderResourceModelSource(val configuration: Configuration)
     // update nodes and groups if needed
 
     logger.debug("Getting nodes from Rudder")
-    updateNodesAndGroups()
+    updateNodesAndGroups().provide(Client.default.orDie).unsafeRun
 
     import scala.jdk.CollectionConverters._
     val set = new NodeSetImpl()
@@ -61,23 +62,32 @@ class RudderResourceModelSource(val configuration: Configuration)
 
   }
 
+  extension [A](self: UIO[A])
+    def unsafeRun: A = {
+      Unsafe.unsafe { implicit unsafe =>
+        zio.Runtime.default.unsafe
+          .run(self)
+          .getOrThrowFiberFailure()
+      }
+    }
+
   /**
    * Update the local node cache is needed
    */
-  private def updateNodesAndGroups(): Unit = {
+  private def updateNodesAndGroups(): ZIO[Client, Nothing, Unit] = {
     val now = System.currentTimeMillis()
 
-    if (this.lastUpdateTime + configuration.refreshInterval.ms < now) {
-      getNodesFromRudder(configuration) match {
-        case Left(ErrorMsg(msg, optEx)) =>
-          // do not update cache
+    val doUpdate = getNodesFromRudder(configuration)
+      .fold(
+        errorMsg => { // do not update cache
           logger.error(
-            s"Error when trying to get new nodes information from Rudder: ${msg}"
+            s"Error when trying to get new nodes information from Rudder: ${errorMsg.value}"
           )
-          optEx.foreach { ex =>
+          errorMsg.exception.foreach { ex =>
             logger.error("Root exception was: ", ex)
           }
-        case Right(n)                   =>
+        },
+        n => {
           // we only update time here, meaning that each time there is an error,
           // we will try again next time.
           // that may lead to funny loop when there is always error and user query quickly the
@@ -85,12 +95,18 @@ class RudderResourceModelSource(val configuration: Configuration)
           // things don't work immediately.
           this.lastUpdateTime = now
           this.nodes = n
-      }
-    } else {
+        }
+      )
+
+    val postponeUpdate = {
       logger.debug(
         s"Not updating nodes and groups because refresh interval of ${configuration.refreshInterval.secondes}s was not elapsed since last update."
       )
+      ZIO.unit
     }
+
+    if (this.lastUpdateTime + configuration.refreshInterval.ms < now) doUpdate
+    else postponeUpdate
   }
 
   /**
@@ -99,20 +115,13 @@ class RudderResourceModelSource(val configuration: Configuration)
    */
   private def getNodesFromRudder(
       config: Configuration
-  ): Failable[Map[NodeId, NodeEntryImpl]] = {
+  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] = {
 
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
-      groups <- Right(Seq.empty[Group])
-      newNodes = Unsafe.unsafe { implicit unsafe =>
-        zio.Runtime.default.unsafe
-          .run(
-            RudderAPIQuery.queryNodes(config).provide(zio.http.Client.default)
-          )
-          .getOrThrowFiberFailure()
-
-      }
+      groups <- ZIO.succeed(Seq.empty[Group])
+      newNodes <- RudderAPIQuery.queryNodes(config)
     } yield {
       import scala.jdk.CollectionConverters._
       val groupByNode = getGroupForNode(groups)

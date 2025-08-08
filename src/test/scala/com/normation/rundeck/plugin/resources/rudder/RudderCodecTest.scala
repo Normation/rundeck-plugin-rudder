@@ -7,8 +7,6 @@ import zio.json.*
 import zio.test.Assertion.*
 import zio.test.*
 
-class RudderCodecTest
-
 object RudderCodecTest extends ZIOSpecDefault {
 
   override def spec = {
