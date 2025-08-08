@@ -106,11 +106,12 @@ class RudderResourceModelSource(val configuration: Configuration)
     for {
       groups <- Right(Seq.empty[Group])
       newNodes = Unsafe.unsafe { implicit unsafe =>
-        zio.Runtime.unsafe
-          .fromLayer(zio.http.Client.default)
-          .unsafe
-          .run(RudderAPIQuery.queryNodes(config))
-          .getOrElse(Map.empty)
+        zio.Runtime.default.unsafe
+          .run(
+            RudderAPIQuery.queryNodes(config).provide(zio.http.Client.default)
+          )
+          .getOrThrowFiberFailure()
+
       }
     } yield {
       import scala.jdk.CollectionConverters._

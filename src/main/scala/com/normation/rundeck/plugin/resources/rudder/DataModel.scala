@@ -16,6 +16,9 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
+import zio.json.*
+import zio.schema.{DeriveSchema, Schema}
+
 /**
  * This file contains data structure definition for our model.
  *
@@ -93,6 +96,91 @@ final case class Configuration(
 
 //Rudder node ID, used as key to synchro nodes
 final case class NodeId(value: String)
+
+case class Data(
+    nodes: Seq[Node]
+)
+
+object Data {
+  given JsonDecoder[Data] = DeriveJsonDecoder.gen
+}
+
+case class Machine(
+    id: String,
+    `type`: String,
+    provider: String,
+    manufacturer: String,
+    serialNumber: String
+)
+
+object Machine {
+  given JsonDecoder[Machine] = DeriveJsonDecoder.gen
+}
+
+case class ManagementTechnology(
+    name: String,
+    version: String,
+    capabilities: Seq[String],
+    nodeKind: String
+)
+
+object ManagementTechnology {
+  given JsonDecoder[ManagementTechnology] = DeriveJsonDecoder.gen
+}
+
+case class Node(
+    id: String,
+    hostname: String,
+    status: String,
+    state: String,
+    os: Os,
+    architectureDescription: String,
+    ram: Int,
+    machine: Machine,
+    ipAddresses: Seq[String],
+    description: String,
+    acceptanceDate: String,
+    lastInventoryDate: String,
+    policyServerId: String,
+    managementTechnology: Seq[ManagementTechnology],
+    properties: Seq[String],
+    policyMode: String,
+    timezone: Timezone
+)
+
+object Node {
+  given JsonDecoder[Node] = DeriveJsonDecoder.gen
+}
+
+case class Os(
+    `type`: String,
+    name: String,
+    version: String,
+    fullName: String,
+    kernelVersion: String
+)
+
+object Os {
+  given JsonDecoder[Os] = DeriveJsonDecoder.gen
+}
+
+case class RudderNodeResponse(
+    action: String,
+    result: String,
+    data: Data
+)
+object RudderNodeResponse {
+  given JsonDecoder[RudderNodeResponse] = DeriveJsonDecoder.gen
+}
+
+case class Timezone(
+    name: String,
+    offset: String
+)
+
+object Timezone {
+  given JsonDecoder[Timezone] = DeriveJsonDecoder.gen
+}
 
 //notice: for nodes, we directly use rundeck
 //NodeEntryImpl, interfacing is much easier.
