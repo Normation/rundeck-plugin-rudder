@@ -190,5 +190,15 @@
       <artifactId>pprint_3</artifactId>
       <version>0.9.3</version>
     </dependency>
+    <dependency>
+      <groupId>dev.zio</groupId>
+      <artifactId>zio-config_3</artifactId>
+      <version>4.0.4</version>
+    </dependency>
+    <dependency>
+      <groupId>io.github.iltotore</groupId>
+      <artifactId>iron_3</artifactId>
+      <version>3.1.0</version>
+    </dependency>
   </dependencies>
 </project>
