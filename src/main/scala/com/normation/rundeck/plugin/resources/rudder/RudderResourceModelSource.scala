@@ -38,7 +38,7 @@ class RudderResourceModelSource(val configuration: Configuration)
   private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   // we are locally caching nodes and groups instances.
-  private var nodes = Map[NodeId, NodeEntryImpl]()
+  private var nodes: INodeSet = new NodeSetImpl()
 
   // last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
   private var lastUpdateTime = 0L
@@ -50,16 +50,10 @@ class RudderResourceModelSource(val configuration: Configuration)
    */
   @throws(classOf[ResourceModelSourceException])
   override def getNodes: INodeSet = {
-    // update nodes and groups if needed
-
     logger.debug("Getting nodes from Rudder")
-    updateNodesAndGroups().provide(Client.default.orDie).unsafeRun
-
-    import scala.jdk.CollectionConverters._
-    val set = new NodeSetImpl()
-    set.putNodes(nodes.values.toSet[INodeEntry].asJava)
-    set
-
+    updateNodesAndGroups()
+      .provide(Client.default.orDie)
+      .unsafeRun
   }
 
   extension [A](self: UIO[A])
@@ -71,10 +65,18 @@ class RudderResourceModelSource(val configuration: Configuration)
       }
     }
 
+  extension (self: Map[NodeId, NodeEntryImpl])
+    def toRundeckNodeSet: INodeSet = {
+      import scala.jdk.CollectionConverters._
+      val set = new NodeSetImpl()
+      set.putNodes(self.values.toSet[INodeEntry].asJava)
+      set
+    }
+
   /**
    * Update the local node cache is needed
    */
-  private def updateNodesAndGroups(): ZIO[Client, Nothing, Unit] = {
+  private def updateNodesAndGroups(): ZIO[Client, Nothing, INodeSet] = {
     val now = System.currentTimeMillis()
 
     val doUpdate = getNodesFromRudder(configuration)
@@ -94,7 +96,7 @@ class RudderResourceModelSource(val configuration: Configuration)
           // method, but the user would not understand if he repairs an error on Rudder, and
           // things don't work immediately.
           this.lastUpdateTime = now
-          this.nodes = n
+          this.nodes = n.toRundeckNodeSet
         }
       )
 
@@ -105,8 +107,9 @@ class RudderResourceModelSource(val configuration: Configuration)
       ZIO.unit
     }
 
-    if (this.lastUpdateTime + configuration.refreshInterval.ms < now) doUpdate
-    else postponeUpdate
+    (if (this.lastUpdateTime + configuration.refreshInterval.ms < now) doUpdate
+     else postponeUpdate)
+      .as(this.nodes)
   }
 
   /**
