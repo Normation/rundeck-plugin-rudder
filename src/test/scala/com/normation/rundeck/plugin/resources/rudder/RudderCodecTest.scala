@@ -81,7 +81,6 @@ object RudderCodecTest extends ZIOSpecDefault {
       }
 
       val decoded = json.fromJson[RudderNodeResponse]
-      pprint.pprintln(decoded)
 
       val expected = RudderNodeResponse(
         action = "listAcceptedNodes",
