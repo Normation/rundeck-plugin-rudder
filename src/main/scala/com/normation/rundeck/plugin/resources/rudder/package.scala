@@ -16,7 +16,17 @@
 
 package com.normation.rundeck.plugin.resources
 
+import zio.{IO, UIO, ZIO}
+
 package object rudder {
+
+  extension [A](self: A)
+    def fail: IO[A, Nothing] = {
+      ZIO.fail(self)
+    }
+    def succeed: UIO[A] = {
+      ZIO.succeed(self)
+    }
 
   /**
    * Just a shorthand for our "that method can fail, so Either it returns an

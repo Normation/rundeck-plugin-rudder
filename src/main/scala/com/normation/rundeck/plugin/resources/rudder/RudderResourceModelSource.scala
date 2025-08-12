@@ -123,7 +123,7 @@ class RudderResourceModelSource(val configuration: Configuration)
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
-      groups <- ZIO.succeed(Seq.empty[Group])
+      groups <- Seq.empty[Group].succeed
       newNodes <- RudderAPIQuery.queryNodes(config)
     } yield {
       import scala.jdk.CollectionConverters._

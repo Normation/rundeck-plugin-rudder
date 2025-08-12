@@ -13,8 +13,8 @@ object Main extends ZIOAppDefault {
       args <- getArgs
       apiToken <-
         if (args.isEmpty)
-          ZIO.fail("Please provide an API token as a program argument.")
-        else ZIO.succeed(args.head)
+          "Please provide an API token as a program argument.".fail
+        else args.head.succeed
       _ <- {
         val config = Configuration(
           url = RudderUrl("http://127.0.0.1:8080/rudder", ApiLatest),

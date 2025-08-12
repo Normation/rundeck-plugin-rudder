@@ -17,7 +17,7 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import zio.json.*
-import zio.schema.{DeriveSchema, Schema}
+import zio.{IO, ZIO}
 
 /**
  * This file contains data structure definition for our model.

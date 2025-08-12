@@ -18,11 +18,9 @@ package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import zio.{Chunk, ZIO}
-import zio.http.{Client, FormField, Headers, QueryParams, Request, Status, URL}
+import zio.http.{Client, Headers, QueryParams, Request, Status, URL}
 import zio.http.Method.GET
-import zio.json.{DeriveJsonEncoder, JsonDecoder}
 import zio.json.DecoderOps
-import zio.schema.{DeriveSchema, Schema}
 
 /**
  * This file manages the REST query logic. This is where queries to the Rudder
@@ -83,28 +81,23 @@ object RudderAPIQuery {
       .debug
       .flatMap(response => {
         response.status match
-          case informational: Status.Informational => ???
-          case success: Status.Success             =>
+          case success: Status.Success =>
             response.body.asString.debug.orDie
-          case redirection: Status.Redirection     => ???
-          case error: Status.Error                 =>
-            ZIO.fail(
-              ErrorMsg(
-                s"Error ${error.code} : ${error.reasonPhrase}",
-                None
-              )
-            )
-          case Status.Custom(code, reasonPhrase)   => ???
+          case error: Status.Error     =>
+            ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}").fail
+          case status: Status          =>
+            val errMsg =
+              s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
+            ErrorMsg(errMsg).fail
       })
       .flatMap(body => {
         body.fromJson[RudderNodeResponse] match
-          case Left(errMsg)    => ZIO.fail(ErrorMsg(errMsg, None))
+          case Left(errMsg)    => ErrorMsg(errMsg).fail
           case Right(nodeList) =>
-            ZIO.succeed(
-              nodeList.data.nodes
-                .map(node => (NodeId(node.id), extractNode(node, config)))
-                .toMap
-            )
+            nodeList.data.nodes
+              .map(node => (NodeId(node.id), extractNode(node, config)))
+              .toMap
+              .succeed
       })
 
   }
@@ -170,13 +163,13 @@ object RudderAPIQuery {
       rudderNode.ipAddresses.mkString(", ")
     )
     rudderNode.properties.foreach { case Property(name, value) =>
-      node.getAttributes.put(s"rudder_node_properties:${name}", value)
+      node.getAttributes.put(s"rudder_node_properties:$name", value)
     }
     rudderNode.accounts.foreach { accounts =>
       node.getAttributes.put("accounts_on_server", accounts.mkString(", "))
     }
     rudderNode.environmentVariables.foreach { case EnvironmentVariable(k, v) =>
-      node.getAttributes.put(s"rudder_environment_variables:${k}", v)
+      node.getAttributes.put(s"rudder_environment_variables:$k", v)
     }
 
     // network interfaces
@@ -184,7 +177,7 @@ object RudderAPIQuery {
       i.name.foreach { name =>
         i.ipAddresses.foreach(ips => {
           node.getAttributes.put(
-            s"rudder_network_interface:${name}:ip_addresses",
+            s"rudder_network_interface:$name:ip_addresses",
             ips.mkString(", ")
           )
         })
@@ -192,7 +185,7 @@ object RudderAPIQuery {
           .filter((k, _) => k != "name" && k != "ipAddresses")
           .foreach { (k, v) =>
             node.getAttributes.put(
-              s"rudder_network_interface:${name}:${k}",
+              s"rudder_network_interface:$name:$k",
               v.toString
             )
           }
@@ -205,7 +198,7 @@ object RudderAPIQuery {
         disk.toMap
           .filter((k, _) => k != "name")
           .foreach { (k, v) =>
-            node.getAttributes.put(s"rudder_storage:${name}:${k}", v.toString)
+            node.getAttributes.put(s"rudder_storage:$name:$k", v.toString)
           }
       }
     })
@@ -217,7 +210,7 @@ object RudderAPIQuery {
           .filter((k, _) => k != "name")
           .foreach { (k, v) =>
             node.getAttributes
-              .put(s"rudder_file_system:${name}:${k}", v.toString)
+              .put(s"rudder_file_system:$name:$k", v.toString)
           }
       }
     })
