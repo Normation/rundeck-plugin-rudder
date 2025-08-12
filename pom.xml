@@ -77,7 +77,7 @@
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-              <Rundeck-Plugin-Libs>lib/scala-library lib/scala-collection-compat_3 lib/scala3-library_3 lib/zio-http_3 lib/zio_3 lib/zio-stacktracer_3 lib/zio-internal-macros_3 lib/zio-schema_3 lib/izumi-reflect_3 lib/izumi-reflect-thirdparty-boopickle-shaded_3 lib/netty-transport-native-unix-common lib/netty-transport-native-kqueue lib/netty-transport-native-epoll lib/netty-transport-classes-kqueue lib/netty-transport-classes-epoll lib/netty-transport lib/netty-resolver lib/netty-pkitesting lib/netty-handler-proxy lib/netty-handler lib/netty-common lib/netty-codec-socks lib/netty-codec-http lib/netty-codec-compression lib/netty-codec-base lib/netty-buffer lib/zio-prelude_3</Rundeck-Plugin-Libs>
+              <Rundeck-Plugin-Libs>lib/bcpkix-jdk18on lib/bcprov-jdk18on lib/bcutil-jdk18on lib/iron_3 lib/izumi-reflect_3 lib/izumi-reflect-thirdparty-boopickle-shaded_3 lib/magnolia_3 lib/netty-buffer lib/netty-codec-base lib/netty-codec-compression lib/netty-codec-http lib/netty-codec-socks lib/netty-common lib/netty-handler lib/netty-handler-proxy lib/netty-pkitesting lib/netty-resolver lib/netty-transport-classes-epoll lib/netty-transport-classes-kqueue lib/netty-transport lib/netty-transport-native-epoll lib/netty-transport-native-kqueue lib/netty-transport-native-unix-common lib/portable-scala-reflect_2.13 lib/scala3-library_3 lib/scala-collection-compat_3 lib/scala-library lib/unroll-annotation_3 lib/zio_3 lib/zio-config_3 lib/zio-constraintless_3 lib/zio-http_3 lib/zio-internal-macros_3 lib/zio-json_3 lib/zio-prelude_3 lib/zio-prelude-macros_3 lib/zio-schema_3 lib/zio-schema-derivation_3 lib/zio-schema-json_3 lib/zio-schema-macros_3 lib/zio-schema-protobuf_3 lib/zio-stacktracer_3 lib/zio-streams_3 lib/zio-test_3.jar</Rundeck-Plugin-Libs>
             </manifestEntries>
           </archive>
         </configuration>
@@ -85,61 +85,6 @@
       <plugin>
         <artifactId>maven-release-plugin</artifactId>
         <version>3.1.1</version>
-      </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.6.0</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <minimizeJar>true</minimizeJar>
-            </configuration>
-          </execution>
-        </executions>
-        <configuration>
-          <outputDirectory>${project.build.directory}/original</outputDirectory>
-          <createDependencyReducedPom>false</createDependencyReducedPom>
-          <minimizeJar>true</minimizeJar>
-          <filters>
-            <filter>
-              <artifact>com.softwaremill.magnolia1_3:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>dev.zio:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>*scala*:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>com.lihaoyi:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>io.netty:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>org.bouncycastle:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>io.github.iltotore:*</artifact>
-              <excludes><exclude>META-INF/**</exclude></excludes>
-            </filter>
-            <filter>
-              <artifact>org.rundeck-plugins:rundeck-rudder-nodes-plugin</artifact>
-              <excludes><exclude>lib/**</exclude></excludes>
-            </filter>
-          </filters>
-        </configuration>
       </plugin>
     </plugins>
   </build>
