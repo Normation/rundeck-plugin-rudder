@@ -105,44 +105,17 @@ object Data {
   given JsonDecoder[Data] = DeriveJsonDecoder.gen
 }
 
-case class Machine(
-    id: String,
-    `type`: String,
-    manufacturer: Option[String],
-    serialNumber: Option[String]
-)
-
-object Machine {
-  given JsonDecoder[Machine] = DeriveJsonDecoder.gen
-}
-
-case class ManagementTechnology(
-    name: String,
-    version: Option[String],
-    capabilities: Seq[String],
-    nodeKind: String
-)
-
-object ManagementTechnology {
-  given JsonDecoder[ManagementTechnology] = DeriveJsonDecoder.gen
-}
-
 case class Node(
     id: String,
     hostname: String,
     status: String,
     architectureDescription: String, // optional in the Rudder API, but required here
-    description: Option[String],
     ipAddresses: Seq[String],
-    acceptanceDate: Option[String],
     lastInventoryDate: String, // optional in the Rudder API, but required here
-    machine: Option[Machine],
     os: Os, // optional in the Rudder API, but required here
     policyServerId: String, // optional in the Rudder API, but required here
     properties: Seq[Property],
-    policyMode: Option[String],
     ram: Option[Int],
-    timezone: Option[Timezone],
     accounts: Option[Seq[String]],
     environmentVariables: Option[Seq[EnvironmentVariable]],
     networkInterfaces: Option[Seq[NetworkInterface]],
@@ -180,19 +153,7 @@ object RudderNodeResponse {
   given JsonDecoder[RudderNodeResponse] = DeriveJsonDecoder.gen
 }
 
-case class Timezone(
-    name: String,
-    offset: String
-)
-
-object Timezone {
-  given JsonDecoder[Timezone] = DeriveJsonDecoder.gen
-}
-
-case class EnvironmentVariable(
-    name: String,
-    value: String
-)
+case class EnvironmentVariable(name: String, value: String)
 object EnvironmentVariable {
   given JsonDecoder[EnvironmentVariable] = DeriveJsonDecoder.gen
 }

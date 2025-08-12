@@ -27,27 +27,15 @@ object BuildRundeckNodeTest extends ZIOSpecDefault {
           ),
           architectureDescription = "x86_64",
           ram = Some(2062548992),
-          machine = Some(
-            Machine(
-              id = "63a9f0ea-7bb9-8050-796b-649e85481845",
-              `type` = "Virtual",
-              manufacturer = Some("innotek GmbH"),
-              serialNumber = Some("87932606-339f-4e0e-a343-f5e3ece18c55")
-            )
-          ),
           ipAddresses = List(
             "0:0:0:0:0:0:0:1",
             "127.0.0.1",
             "192.168.4.2",
             "10.0.2.15"
           ),
-          description = Some(""),
-          acceptanceDate = Some("2025-04-02T12:46:58Z"),
           lastInventoryDate = "2025-08-08T05:55:12Z",
           policyServerId = "root",
           properties = List(),
-          policyMode = Some("default"),
-          timezone = Some(Timezone(name = "UTC", offset = "+0000")),
           environmentVariables = None,
           accounts = None,
           networkInterfaces = None,
