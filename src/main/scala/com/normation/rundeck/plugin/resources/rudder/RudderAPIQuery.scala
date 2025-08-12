@@ -87,7 +87,13 @@ object RudderAPIQuery {
           case success: Status.Success             =>
             response.body.asString.debug.orDie
           case redirection: Status.Redirection     => ???
-          case error: Status.Error                 => ???
+          case error: Status.Error                 =>
+            ZIO.fail(
+              ErrorMsg(
+                s"Error ${error.code} : ${error.reasonPhrase}",
+                None
+              )
+            )
           case Status.Custom(code, reasonPhrase)   => ???
       })
       .flatMap(body => {
@@ -104,20 +110,6 @@ object RudderAPIQuery {
   }
 
   /**
-   * Query for groups
-   */
-  def queryGroups(config: Configuration): Failable[Seq[Group]] = {
-    ???
-  }
-
-  /**
-   * Extract a group from what should be a JSON for group.
-   */
-  def extractGroup(json: Any) = {
-    ???
-  }
-
-  /**
    * This is where all the mapping logic between JSON (for node details) and
    * Rundeck "NodeEntry" object is done. We don't use the interface, because we
    * would most likely not be compatible with other implementations, and the
@@ -130,37 +122,130 @@ object RudderAPIQuery {
       config: Configuration
   ): NodeEntryImpl = {
 
-    val rundeckUser =
-      config.envVarRundeckUser.getOrElse(config.rundeckDefaultUser)
+    val env = rudderNode.environmentVariables match
+      case Some(value) => value.map(envVar => (envVar.name, envVar.value)).toMap
+      case None        => Map.empty
+
+    val rundeckUser = config.envVarRundeckUser
+      .flatMap(v => env.get(v))
+      .getOrElse(config.rundeckDefaultUser)
+
+    val sslPort = config.envVarSSLPort
+      .flatMap(v => env.get(v))
+      .getOrElse(config.sshDefaultPort.toString)
 
     val node = NodeEntryImpl()
 
-    node.setNodename(rudderNode.hostname)
-    node.setHostname(rudderNode.hostname)
+    // Mandatory attributes
+    node.setNodename(rudderNode.hostname + " " + rudderNode.id)
+    node.setHostname(rudderNode.hostname + ":" + sslPort)
     node.setOsName(rudderNode.os.name)
     node.setOsFamily(rudderNode.os.`type`)
     node.setOsArch(rudderNode.architectureDescription)
     node.setOsVersion(rudderNode.os.version)
     node.setUsername(rundeckUser)
     node.getAttributes.put("rudder_information:id", rudderNode.id)
-    node.getAttributes
-      .put(
-        "rudder_information:node_direct_url",
-        config.url.nodeUrl(NodeId(rudderNode.id))
-      )
-    node.getAttributes
-      .put(
-        "rudder_information:policy_server_id",
-        rudderNode.policyServerId
-      )
-    node.getAttributes
-      .put(
-        "rudder_information:last_inventory_date",
-        rudderNode.lastInventoryDate
-      )
-    node.getAttributes
-      .put("rudder_information:node_status", rudderNode.status)
+    node.getAttributes.put(
+      "rudder_information:node_direct_url",
+      config.url.nodeUrl(NodeId(rudderNode.id))
+    )
+    node.getAttributes.put(
+      "rudder_information:policy_server_id",
+      rudderNode.policyServerId
+    )
+    node.getAttributes.put(
+      "rudder_information:last_inventory_date",
+      rudderNode.lastInventoryDate
+    )
+    node.getAttributes.put("rudder_information:node_status", rudderNode.status)
+
+    // Optional attributes
+
+    node.setDescription(rudderNode.os.fullName)
+    rudderNode.ram.foreach { ram =>
+      node.getAttributes.put("total_ram", ram.toString)
+    }
+    node.getAttributes.put(
+      "ip_addresses",
+      rudderNode.ipAddresses.mkString(", ")
+    )
+    rudderNode.properties.foreach { case Property(name, value) =>
+      node.getAttributes.put(s"rudder_node_properties:${name}", value)
+    }
+    rudderNode.accounts.foreach { accounts =>
+      node.getAttributes.put("accounts_on_server", accounts.mkString(", "))
+    }
+    rudderNode.environmentVariables.foreach { case EnvironmentVariable(k, v) =>
+      node.getAttributes.put(s"rudder_environment_variables:${k}", v)
+    }
+
+    // network interfaces
+    rudderNode.networkInterfaces.foreach(_.foreach { i =>
+      i.name.foreach { name =>
+        i.ipAddresses.foreach(ips => {
+          node.getAttributes.put(
+            s"rudder_network_interface:${name}:ip_addresses",
+            ips.mkString(", ")
+          )
+        })
+        i.toMap
+          .filter((k, _) => k != "name" && k != "ipAddresses")
+          .foreach { (k, v) =>
+            node.getAttributes.put(
+              s"rudder_network_interface:${name}:${k}",
+              v.toString
+            )
+          }
+      }
+    })
+
+    // storage
+    rudderNode.storage.foreach(_.foreach { disk =>
+      disk.name.foreach { name =>
+        disk.toMap
+          .filter((k, _) => k != "name")
+          .foreach { (k, v) =>
+            node.getAttributes.put(s"rudder_storage:${name}:${k}", v.toString)
+          }
+      }
+    })
+
+    // file systems
+    rudderNode.fileSystems.foreach(_.foreach { fs =>
+      fs.name.foreach { name =>
+        fs.toMap
+          .filter((k, _) => k != "name")
+          .foreach { (k, v) =>
+            node.getAttributes
+              .put(s"rudder_file_system:${name}:${k}", v.toString)
+          }
+      }
+    })
 
     node
+  }
+
+  /** Utility extension method to convert a case class into a map */
+  extension (self: Any)
+    def toMap: Map[String, Any] = {
+      self.getClass.getDeclaredFields.foldLeft(Map.empty[String, Any]) {
+        (a, f) =>
+          f.setAccessible(true)
+          a + (f.getName -> f.get(self))
+      }
+    }
+
+  /**
+   * Query for groups
+   */
+  def queryGroups(config: Configuration): ZIO[Client, ErrorMsg, Seq[Group]] = {
+    ???
+  }
+
+  /**
+   * Extract a group from what should be a JSON for group.
+   */
+  def extractGroup(json: Any) = {
+    ???
   }
 }

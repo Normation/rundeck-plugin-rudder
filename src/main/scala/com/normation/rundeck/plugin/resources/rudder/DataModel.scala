@@ -108,9 +108,8 @@ object Data {
 case class Machine(
     id: String,
     `type`: String,
-    provider: String,
-    manufacturer: String,
-    serialNumber: String
+    manufacturer: Option[String],
+    serialNumber: Option[String]
 )
 
 object Machine {
@@ -119,7 +118,7 @@ object Machine {
 
 case class ManagementTechnology(
     name: String,
-    version: String,
+    version: Option[String],
     capabilities: Seq[String],
     nodeKind: String
 )
@@ -132,24 +131,32 @@ case class Node(
     id: String,
     hostname: String,
     status: String,
-    state: String,
-    os: Os,
-    architectureDescription: String,
-    ram: Int,
-    machine: Machine,
+    architectureDescription: String, // optional in the Rudder API, but required here
+    description: Option[String],
     ipAddresses: Seq[String],
-    description: String,
-    acceptanceDate: String,
-    lastInventoryDate: String,
-    policyServerId: String,
-    managementTechnology: Seq[ManagementTechnology],
-    properties: Seq[String],
-    policyMode: String,
-    timezone: Timezone
+    acceptanceDate: Option[String],
+    lastInventoryDate: String, // optional in the Rudder API, but required here
+    machine: Option[Machine],
+    os: Os, // optional in the Rudder API, but required here
+    policyServerId: String, // optional in the Rudder API, but required here
+    properties: Seq[Property],
+    policyMode: Option[String],
+    ram: Option[Int],
+    timezone: Option[Timezone],
+    accounts: Option[Seq[String]],
+    environmentVariables: Option[Seq[EnvironmentVariable]],
+    networkInterfaces: Option[Seq[NetworkInterface]],
+    storage: Option[Seq[Disk]],
+    fileSystems: Option[Seq[FileSystem]]
 )
 
 object Node {
   given JsonDecoder[Node] = DeriveJsonDecoder.gen
+}
+
+case class Property(name: String, value: String)
+object Property {
+  given JsonDecoder[Property] = DeriveJsonDecoder.gen
 }
 
 case class Os(
@@ -182,6 +189,55 @@ object Timezone {
   given JsonDecoder[Timezone] = DeriveJsonDecoder.gen
 }
 
+case class EnvironmentVariable(
+    name: String,
+    value: String
+)
+object EnvironmentVariable {
+  given JsonDecoder[EnvironmentVariable] = DeriveJsonDecoder.gen
+}
+
+case class NetworkInterface(
+    name: Option[String],
+    mask: Option[Seq[String]],
+    `type`: Option[String],
+    speed: Option[String],
+    status: Option[String],
+    dhcpServer: Option[String],
+    macAddress: Option[String],
+    ipAddresses: Option[Seq[String]]
+)
+object NetworkInterface {
+  given JsonDecoder[NetworkInterface] = DeriveJsonDecoder.gen
+}
+
+case class Disk(
+    name: String,
+    `type`: Option[String],
+    `size`: Option[Int],
+    model: Option[String],
+    firmware: Option[String],
+    quantity: Int,
+    description: Option[String],
+    manufacturer: Option[String],
+    serialNumber: Option[String]
+)
+object Disk {
+  given JsonDecoder[Disk] = DeriveJsonDecoder.gen
+}
+
+case class FileSystem(
+    name: Option[String],
+    mountPoint: String,
+    description: Option[String],
+    fileCount: Option[Int],
+    freeSpace: Option[Int],
+    totalSpace: Option[Int]
+)
+object FileSystem {
+  given JsonDecoder[FileSystem] = DeriveJsonDecoder.gen
+}
+
 //notice: for nodes, we directly use rundeck
 //NodeEntryImpl, interfacing is much easier.
 
@@ -200,10 +256,8 @@ final case class Group(
 //////////////////////////////// Error container ////////////////////////////////
 
 /**
- * All the method that can fail are of the Failable[T] type (defined in
- * package.scala, alias to Either[ErrorMsg,T]). ErrorMsg is just a container for
- * an Error, with an human readable message, and optionnaly the root exception
- * which caused it.
+ * ErrorMsg is a container for an Error with a human-readable message, and
+ * optionally the root exception that caused the error.
  */
 
 final case class ErrorMsg(value: String, exception: Option[Throwable] = None)
