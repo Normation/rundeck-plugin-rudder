@@ -1,17 +1,37 @@
+/*
+ * Copyright 2025 Normation (http://normation.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.normation.rundeck.plugin.resources.rudder
 
-import zio.Scope
+import org.junit.runner.RunWith
+import zio.*
 import zio.json.*
-import zio.test.Assertion.*
+import zio.json.ast.Json
 import zio.test.*
+import zio.test.Assertion.*
+import zio.test.junit.ZTestJUnitRunner
 
-object RudderCodecTest extends ZIOSpecDefault {
+@RunWith(classOf[ZTestJUnitRunner])
+class RudderCodecTest extends ZIOSpecDefault {
 
   override def spec: Spec[TestEnvironment & Scope, Any] = {
     suite("json codec test")(
       test("decoding should succeed when all required fields are present") {
 
-        val json = {
+        val json =
           """{
           |  "action": "listAcceptedNodes",
           |  "result": "success",
@@ -66,18 +86,25 @@ object RudderCodecTest extends ZIOSpecDefault {
           |            "nodeKind": "root"
           |          }
           |        ],
-          |        "properties": [],
+          |        "properties": [
+          |          {
+          |            "name": "prop",
+          |            "value": "prop_value"
+          |          }
+          |        ],
           |        "policyMode": "default",
           |        "timezone": {
           |          "name": "UTC",
           |          "offset": "+0000"
+          |        },
+          |        "environmentVariables": {
+          |          "envKey": "envVal"
           |        }
           |      }
           |    ]
           |  }
           |}
           |""".stripMargin
-        }
 
         val decoded = json.fromJson[RudderNodeResponse]
 
@@ -109,8 +136,8 @@ object RudderCodecTest extends ZIOSpecDefault {
                 ),
                 lastInventoryDate = "2025-08-08T05:55:12Z",
                 policyServerId = "root",
-                properties = List(),
-                environmentVariables = None,
+                properties = List(Property("prop", "prop_value")),
+                environmentVariables = Some(Map.apply(("envKey", "envVal"))),
                 accounts = None,
                 networkInterfaces = None,
                 storage = None,
@@ -124,7 +151,7 @@ object RudderCodecTest extends ZIOSpecDefault {
 
       },
       test("decoding should fail when a required field is missing") {
-        val json = {
+        val json =
           """{
           |  "action": "listAcceptedNodes",
           |  "result": "success",
@@ -160,7 +187,6 @@ object RudderCodecTest extends ZIOSpecDefault {
           |  }
           |}
           |""".stripMargin
-        }
 
         val decoded = json.fromJson[RudderNodeResponse]
         val errMsg = ".data.nodes[0].os(missing)"
@@ -169,7 +195,7 @@ object RudderCodecTest extends ZIOSpecDefault {
 
       },
       test("decoding should fail when several required fields are missing") {
-        val json = {
+        val json =
           """{
             |  "action": "listAcceptedNodes",
             |  "result": "success",
@@ -210,7 +236,6 @@ object RudderCodecTest extends ZIOSpecDefault {
             |  }
             |}
             |""".stripMargin
-        }
 
         val decoded = json.fromJson[RudderNodeResponse]
         val errMsg = ".data.nodes[0].architectureDescription(missing)"

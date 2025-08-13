@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,15 +16,17 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
+import com.dtolabs.rundeck.core.common.INodeEntry
+import com.dtolabs.rundeck.core.common.INodeSet
+import com.dtolabs.rundeck.core.common.NodeEntryImpl
+import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.resources.ResourceModelSource
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceException
-import com.dtolabs.rundeck.core.common.INodeSet
-import com.dtolabs.rundeck.core.common.NodeSetImpl
-import com.dtolabs.rundeck.core.common.INodeEntry
-import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
+import zio.UIO
+import zio.Unsafe
+import zio.ZIO
 import zio.http.Client
-import zio.{IO, UIO, Unsafe, ZIO}
 
 /**
  * This is the entry point for one Rudder provisionning. It is responsible for
@@ -57,13 +59,12 @@ class RudderResourceModelSource(val configuration: Configuration)
   }
 
   extension [A](self: UIO[A])
-    def unsafeRun: A = {
+    def unsafeRun: A =
       Unsafe.unsafe { implicit unsafe =>
         zio.Runtime.default.unsafe
           .run(self)
           .getOrThrowFiberFailure()
       }
-    }
 
   extension (self: Map[NodeId, NodeEntryImpl])
     def toRundeckNodeSet: INodeSet = {
@@ -110,6 +111,7 @@ class RudderResourceModelSource(val configuration: Configuration)
     (if (this.lastUpdateTime + configuration.refreshInterval.ms < now) doUpdate
      else postponeUpdate)
       .as(this.nodes)
+
   }
 
   /**
@@ -118,7 +120,7 @@ class RudderResourceModelSource(val configuration: Configuration)
    */
   private def getNodesFromRudder(
       config: Configuration
-  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] = {
+  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] =
 
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
@@ -141,15 +143,14 @@ class RudderResourceModelSource(val configuration: Configuration)
         (nodeId, node)
       }
     }
-  }
 
   private def getGroupForNode(
       groups: Seq[Group]
   ): Map[NodeId, Seq[Group]] = {
     // group groups by nodes id.
     val groupByNodeId =
-      groups.flatMap { g => g.nodeIds.map { n => (n, g) } }.groupBy(_._1)
-    groupByNodeId.view.mapValues { _.map(_._2) }.toMap
+      groups.flatMap(g => g.nodeIds.map(n => (n, g))).groupBy(_._1)
+    groupByNodeId.view.mapValues(_.map(_._2)).toMap
   }
 
 }

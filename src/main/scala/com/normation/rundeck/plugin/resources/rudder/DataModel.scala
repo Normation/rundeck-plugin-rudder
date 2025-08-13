@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import zio.json.*
-import zio.{IO, ZIO}
+import zio.json.ast.Json
 
 /**
  * This file contains data structure definition for our model.
@@ -49,10 +49,9 @@ case object ApiLatest extends ApiVersion { val value = "latest" }
  */
 final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
-  private val url = {
+  private val url =
     if (baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.length - 1)
     else baseUrl
-  }
 
   // endpoint for groups API (only need all of them)
   def groupsApi = s"${url}/api/latest/groups"
@@ -97,13 +96,7 @@ final case class Configuration(
 //Rudder node ID, used as key to synchro nodes
 final case class NodeId(value: String)
 
-case class Data(
-    nodes: Seq[Node]
-)
-
-object Data {
-  given JsonDecoder[Data] = DeriveJsonDecoder.gen
-}
+case class Data(nodes: Seq[Node]) derives JsonDecoder
 
 case class Node(
     id: String,
@@ -117,20 +110,13 @@ case class Node(
     properties: Seq[Property],
     ram: Option[Int],
     accounts: Option[Seq[String]],
-    environmentVariables: Option[Seq[EnvironmentVariable]],
-    networkInterfaces: Option[Seq[NetworkInterface]],
-    storage: Option[Seq[Disk]],
-    fileSystems: Option[Seq[FileSystem]]
-)
+    environmentVariables: Option[Map[String, String]],
+    networkInterfaces: Option[Seq[Json]],
+    storage: Option[Seq[Json]],
+    fileSystems: Option[Seq[Json]]
+) derives JsonDecoder
 
-object Node {
-  given JsonDecoder[Node] = DeriveJsonDecoder.gen
-}
-
-case class Property(name: String, value: String)
-object Property {
-  given JsonDecoder[Property] = DeriveJsonDecoder.gen
-}
+case class Property(name: String, value: String) derives JsonDecoder
 
 case class Os(
     `type`: String,
@@ -138,66 +124,13 @@ case class Os(
     version: String,
     fullName: String,
     kernelVersion: String
-)
-
-object Os {
-  given JsonDecoder[Os] = DeriveJsonDecoder.gen
-}
+) derives JsonDecoder
 
 case class RudderNodeResponse(
     action: String,
     result: String,
     data: Data
-)
-object RudderNodeResponse {
-  given JsonDecoder[RudderNodeResponse] = DeriveJsonDecoder.gen
-}
-
-case class EnvironmentVariable(name: String, value: String)
-object EnvironmentVariable {
-  given JsonDecoder[EnvironmentVariable] = DeriveJsonDecoder.gen
-}
-
-case class NetworkInterface(
-    name: Option[String],
-    mask: Option[Seq[String]],
-    `type`: Option[String],
-    speed: Option[String],
-    status: Option[String],
-    dhcpServer: Option[String],
-    macAddress: Option[String],
-    ipAddresses: Option[Seq[String]]
-)
-object NetworkInterface {
-  given JsonDecoder[NetworkInterface] = DeriveJsonDecoder.gen
-}
-
-case class Disk(
-    name: String,
-    `type`: Option[String],
-    `size`: Option[Int],
-    model: Option[String],
-    firmware: Option[String],
-    quantity: Int,
-    description: Option[String],
-    manufacturer: Option[String],
-    serialNumber: Option[String]
-)
-object Disk {
-  given JsonDecoder[Disk] = DeriveJsonDecoder.gen
-}
-
-case class FileSystem(
-    name: Option[String],
-    mountPoint: String,
-    description: Option[String],
-    fileCount: Option[Int],
-    freeSpace: Option[Int],
-    totalSpace: Option[Int]
-)
-object FileSystem {
-  given JsonDecoder[FileSystem] = DeriveJsonDecoder.gen
-}
+) derives JsonDecoder
 
 //notice: for nodes, we directly use rundeck
 //NodeEntryImpl, interfacing is much easier.

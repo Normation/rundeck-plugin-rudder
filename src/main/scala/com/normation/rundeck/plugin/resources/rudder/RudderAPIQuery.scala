@@ -17,10 +17,19 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
-import zio.{Chunk, ZIO}
-import zio.http.{Client, Headers, QueryParams, Request, Status, URL}
+import zio.Chunk
+import zio.IO
+import zio.ZIO
+import zio.http.Client
+import zio.http.Headers
 import zio.http.Method.GET
+import zio.http.QueryParams
+import zio.http.Request
+import zio.http.Response
+import zio.http.Status
+import zio.http.URL
 import zio.json.DecoderOps
+import zio.json.ast.Json
 
 /**
  * This file manages the REST query logic. This is where queries to the Rudder
@@ -66,40 +75,36 @@ object RudderAPIQuery {
     val fullUrl =
       URL.decode(queryUrl + QueryParams(topic -> params).encode).toOption.get
     val headers = Headers(("X-API-Token" -> config.apiToken))
-    println(fullUrl.path.encode)
-
     val request = Request(method = GET, url = fullUrl, headers = headers)
 
-    Client
-      .batched(request)
-      .mapError(ex => {
-        ErrorMsg(
-          s"Error when trying to get node(s) at url ${fullUrl.encode}: " + ex.getMessage,
-          Some(ex)
+    for {
+      response <- Client
+        .batched(request)
+        .mapError(ex =>
+          ErrorMsg(
+            s"Error when trying to get node(s) at url ${fullUrl.encode}: " + ex.getMessage,
+            Some(ex)
+          )
         )
-      })
-      .debug
-      .flatMap(response => {
-        response.status match
-          case success: Status.Success =>
-            response.body.asString.debug.orDie
-          case error: Status.Error     =>
-            ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}").fail
-          case status: Status          =>
-            val errMsg =
-              s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
-            ErrorMsg(errMsg).fail
-      })
-      .flatMap(body => {
-        body.fromJson[RudderNodeResponse] match
-          case Left(errMsg)    => ErrorMsg(errMsg).fail
-          case Right(nodeList) =>
-            nodeList.data.nodes
-              .map(node => (NodeId(node.id), extractNode(node, config)))
-              .toMap
-              .succeed
-      })
 
+      body <- response.status match
+        case success: Status.Success =>
+          response.body.asString.orDie
+        case error: Status.Error     =>
+          ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}").fail
+        case status: Status          =>
+          val errMsg =
+            s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
+          ErrorMsg(errMsg).fail
+
+      json <- body.fromJson[RudderNodeResponse] match
+        case Left(errMsg)    => ErrorMsg(errMsg).fail
+        case Right(nodeList) =>
+          nodeList.data.nodes
+            .map(node => (NodeId(node.id), extractNode(node, config)))
+            .toMap
+            .succeed
+    } yield json
   }
 
   /**
@@ -116,8 +121,8 @@ object RudderAPIQuery {
   ): NodeEntryImpl = {
 
     val env = rudderNode.environmentVariables match
-      case Some(value) => value.map(envVar => (envVar.name, envVar.value)).toMap
-      case None        => Map.empty
+      case Some(map) => map
+      case None      => Map.empty
 
     val rundeckUser = config.envVarRundeckUser
       .flatMap(v => env.get(v))
@@ -168,77 +173,81 @@ object RudderAPIQuery {
     rudderNode.accounts.foreach { accounts =>
       node.getAttributes.put("accounts_on_server", accounts.mkString(", "))
     }
-    rudderNode.environmentVariables.foreach { case EnvironmentVariable(k, v) =>
+    env.map((k, v) =>
       node.getAttributes.put(s"rudder_environment_variables:$k", v)
-    }
+    )
 
     // network interfaces
     rudderNode.networkInterfaces.foreach(_.foreach { i =>
-      i.name.foreach { name =>
-        i.ipAddresses.foreach(ips => {
-          node.getAttributes.put(
-            s"rudder_network_interface:$name:ip_addresses",
-            ips.mkString(", ")
-          )
-        })
-        i.toMap
-          .filter((k, _) => k != "name" && k != "ipAddresses")
-          .foreach { (k, v) =>
-            node.getAttributes.put(
-              s"rudder_network_interface:$name:$k",
-              v.toString
+      i.asObject.foreach(json =>
+        json.get("name").flatMap(_.asString).foreach { name =>
+          json
+            .get("ipAddresses")
+            .flatMap(_.as[Seq[String]].toOption)
+            .foreach(ips =>
+              node.getAttributes.put(
+                s"rudder_network_interface:$name:ip_addresses",
+                ips.mkString(", ")
+              )
             )
-          }
-      }
+
+          json
+            .filterKeys(k => k != "name" && k != "ipAddresses")
+            .fields
+            .foreach { (k, v) =>
+              v.asSimpleField.foreach(value =>
+                node.getAttributes.put(
+                  s"rudder_network_interface:$name:$k",
+                  value.toString
+                )
+              )
+            }
+        }
+      )
     })
 
     // storage
     rudderNode.storage.foreach(_.foreach { disk =>
-      disk.name.foreach { name =>
-        disk.toMap
-          .filter((k, _) => k != "name")
-          .foreach { (k, v) =>
-            node.getAttributes.put(s"rudder_storage:$name:$k", v.toString)
-          }
-      }
+      disk.asObject.foreach(json =>
+        json.get("name").flatMap(_.asString).foreach { name =>
+          json
+            .filterKeys(k => k != "name")
+            .fields
+            .foreach { (k, v) =>
+              v.asSimpleField.foreach(value =>
+                node.getAttributes
+                  .put(s"rudder_storage:$name:$k", value.toString)
+              )
+            }
+        }
+      )
     })
 
     // file systems
     rudderNode.fileSystems.foreach(_.foreach { fs =>
-      fs.name.foreach { name =>
-        fs.toMap
-          .filter((k, _) => k != "name")
-          .foreach { (k, v) =>
-            node.getAttributes
-              .put(s"rudder_file_system:$name:$k", v.toString)
-          }
-      }
+      fs.asObject.foreach(json =>
+        json.get("name").flatMap(_.asString).foreach { name =>
+          json
+            .filterKeys(k => k != "name")
+            .fields
+            .foreach { (k, v) =>
+              v.asSimpleField.foreach(value =>
+                node.getAttributes
+                  .put(s"rudder_file_system:$name:$k", value.toString)
+              )
+            }
+        }
+      )
     })
 
     node
   }
 
-  /** Utility extension method to convert a case class into a map */
-  extension (self: Any)
-    def toMap: Map[String, Any] = {
-      self.getClass.getDeclaredFields.foldLeft(Map.empty[String, Any]) {
-        (a, f) =>
-          f.setAccessible(true)
-          a + (f.getName -> f.get(self))
-      }
-    }
+  extension (self: Json)
+    private def asSimpleField: Either[String, String | Int | Boolean] =
+      self
+        .as[String]
+        .orElse(self.as[Int])
+        .orElse(self.as[Boolean])
 
-  /**
-   * Query for groups
-   */
-  def queryGroups(config: Configuration): ZIO[Client, ErrorMsg, Seq[Group]] = {
-    ???
-  }
-
-  /**
-   * Extract a group from what should be a JSON for group.
-   */
-  def extractGroup(json: Any) = {
-    ???
-  }
 }

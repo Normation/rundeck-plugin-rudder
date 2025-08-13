@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 package com.normation.rundeck.plugin.resources
 
-import zio.{IO, UIO, ZIO}
+import zio.IO
+import zio.UIO
+import zio.ZIO
 
 package object rudder {
 

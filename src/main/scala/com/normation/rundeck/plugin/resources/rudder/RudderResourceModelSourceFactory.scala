@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,15 @@
 
 package com.normation.rundeck.plugin.resources.rudder;
 
-import java.util.Properties
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
-import com.dtolabs.rundeck.core.plugins.configuration.{
-  ConfigurationException,
-  Describable,
-  Description,
-  PropertyUtil
-}
+import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
+import com.dtolabs.rundeck.core.plugins.configuration.Describable
+import com.dtolabs.rundeck.core.plugins.configuration.Description
+import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
+import java.util.Properties
 import org.slf4j.LoggerFactory
 
 /**
