@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,17 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
+import com.dtolabs.rundeck.core.common.INodeEntry
+import com.dtolabs.rundeck.core.common.INodeSet
+import com.dtolabs.rundeck.core.common.NodeEntryImpl
+import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.resources.ResourceModelSource
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceException
-import com.dtolabs.rundeck.core.common.INodeSet
-import com.dtolabs.rundeck.core.common.NodeSetImpl
-import com.dtolabs.rundeck.core.common.INodeEntry
-import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
+import zio.UIO
+import zio.Unsafe
+import zio.ZIO
+import zio.http.Client
 
 /**
  * This is the entry point for one Rudder provisionning. It is responsible for
@@ -33,13 +37,13 @@ import org.slf4j.LoggerFactory
 class RudderResourceModelSource(val configuration: Configuration)
     extends ResourceModelSource {
 
-  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
+  private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   // we are locally caching nodes and groups instances.
-  private[this] var nodes = Map[NodeId, NodeEntryImpl]()
+  private var nodes: INodeSet = new NodeSetImpl()
 
   // last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
-  private[this] var lastUpdateTime = 0L
+  private var lastUpdateTime = 0L
 
   /**
    * This is the actual, only integration point with Rundeck. The logic is to
@@ -47,68 +51,82 @@ class RudderResourceModelSource(val configuration: Configuration)
    * on v4 API)
    */
   @throws(classOf[ResourceModelSourceException])
-  override def getNodes(): INodeSet = {
-    // update nodes and groups if needed
-
+  override def getNodes: INodeSet = {
     logger.debug("Getting nodes from Rudder")
     updateNodesAndGroups()
-
-    import scala.jdk.CollectionConverters._
-    val set = new NodeSetImpl()
-    set.putNodes(nodes.values.toSet[INodeEntry].asJava)
-    set
-
+      .provide(Client.default.orDie)
+      .unsafeRun
   }
+
+  extension [A](self: UIO[A])
+    def unsafeRun: A =
+      Unsafe.unsafe { implicit unsafe =>
+        zio.Runtime.default.unsafe
+          .run(self)
+          .getOrThrowFiberFailure()
+      }
+
+  extension (self: Map[NodeId, NodeEntryImpl])
+    def toRundeckNodeSet: INodeSet = {
+      import scala.jdk.CollectionConverters._
+      val set = new NodeSetImpl()
+      set.putNodes(self.values.toSet[INodeEntry].asJava)
+      set
+    }
 
   /**
    * Update the local node cache is needed
    */
-  def updateNodesAndGroups(): Unit = {
+  private def updateNodesAndGroups(): ZIO[Client, Nothing, INodeSet] = {
     val now = System.currentTimeMillis()
 
-    if (this.lastUpdateTime + configuration.refreshInterval.ms < now) {
-      getNodesFromRudder(configuration) match {
-        case Left(ErrorMsg(msg, optEx)) =>
-          // do not update cache
+    val doUpdate = getNodesFromRudder(configuration)
+      .fold(
+        errorMsg => { // do not update cache
           logger.error(
-            s"Error when trying to get new nodes information from Rudder: ${msg}"
+            s"Error when trying to get new nodes information from Rudder: ${errorMsg.value}"
           )
-          optEx.foreach { ex =>
+          errorMsg.exception.foreach { ex =>
             logger.error("Root exception was: ", ex)
           }
-        case Right(n)                   =>
+        },
+        n => {
           // we only update time here, meaning that each time there is an error,
           // we will try again next time.
           // that may lead to funny loop when there is always error and user query quickly the
           // method, but the user would not understand if he repairs an error on Rudder, and
           // things don't work immediately.
           this.lastUpdateTime = now
-          this.nodes = n
-      }
-    } else {
+          this.nodes = n.toRundeckNodeSet
+        }
+      )
+
+    val postponeUpdate = {
       logger.debug(
         s"Not updating nodes and groups because refresh interval of ${configuration.refreshInterval.secondes}s was not elapsed since last update."
       )
+      ZIO.unit
     }
+
+    (if (this.lastUpdateTime + configuration.refreshInterval.ms < now) doUpdate
+     else postponeUpdate)
+      .as(this.nodes)
+
   }
 
   /**
-   * This method unconditionnaly get new nodes from Rudder. It builds a the
-   * resulting rundeck nodes, and in particular add groups as tag
+   * This method unconditionally gets new nodes from Rudder. It builds the
+   * corresponding Rundeck nodes, and adds the Rudder groups as tags.
    */
-  def getNodesFromRudder(
+  private def getNodesFromRudder(
       config: Configuration
-  ): Failable[Map[NodeId, NodeEntryImpl]] = {
+  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] =
 
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
-      groups <- Right(
-        Seq.empty[Group]
-      ) // RudderAPIQuery.queryGroups(config).right
-      newNodes <- Right(
-        Map.empty[NodeId, NodeEntryImpl]
-      ) // RudderAPIQuery.queryNodes(config).right
+      groups <- Seq.empty[Group].succeed
+      newNodes <- RudderAPIQuery.queryNodes(config)
     } yield {
       import scala.jdk.CollectionConverters._
       val groupByNode = getGroupForNode(groups)
@@ -125,15 +143,14 @@ class RudderResourceModelSource(val configuration: Configuration)
         (nodeId, node)
       }
     }
-  }
 
-  private[this] def getGroupForNode(
+  private def getGroupForNode(
       groups: Seq[Group]
   ): Map[NodeId, Seq[Group]] = {
     // group groups by nodes id.
     val groupByNodeId =
-      groups.flatMap { g => g.nodeIds.map { n => (n, g) } }.groupBy(_._1)
-    groupByNodeId.view.mapValues { _.map(_._2) }.toMap
+      groups.flatMap(g => g.nodeIds.map(n => (n, g))).groupBy(_._1)
+    groupByNodeId.view.mapValues(_.map(_._2)).toMap
   }
 
 }

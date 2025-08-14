@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,17 +16,15 @@
 
 package com.normation.rundeck.plugin.resources.rudder;
 
-import java.util.Properties
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.plugins.Plugin
-import com.dtolabs.rundeck.core.plugins.configuration.{
-  ConfigurationException,
-  Describable,
-  Description,
-  PropertyUtil
-}
+import com.dtolabs.rundeck.core.plugins.configuration.ConfigurationException
+import com.dtolabs.rundeck.core.plugins.configuration.Describable
+import com.dtolabs.rundeck.core.plugins.configuration.Description
+import com.dtolabs.rundeck.core.plugins.configuration.PropertyUtil
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceFactory
 import com.dtolabs.rundeck.plugins.util.DescriptionBuilder
+import java.util.Properties
 import org.slf4j.LoggerFactory
 
 /**
@@ -46,7 +44,7 @@ class RudderResourceModelSourceFactory(framework: Framework)
     extends ResourceModelSourceFactory
     with Describable {
 
-  private[this] lazy val logger = LoggerFactory.getLogger(this.getClass)
+  private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   /**
    * Try to create a new Rudder resource from a set of properties. Report errors
@@ -54,7 +52,7 @@ class RudderResourceModelSourceFactory(framework: Framework)
    */
   override def createResourceModelSource(
       properties: Properties
-  ): RudderResourceModelSource = {
+  ): RudderResourceModelSource =
     RudderResourceModelSourceFactory.configFromProperties(properties) match {
       case Left(ErrorMsg(msg, optex)) =>
         optex match {
@@ -64,19 +62,17 @@ class RudderResourceModelSourceFactory(framework: Framework)
 
       case Right(config) =>
         logger.info(
-          s"Rudder ressource module initialized. Nodes will be fetch at URL ${config.url.nodesApi} " +
+          s"Rudder resource module initialized. Nodes will be fetched at URL ${config.url.nodesApi} " +
             s"with a refresh rate of ${config.refreshInterval.secondes}s"
         )
         new RudderResourceModelSource(config)
     }
-  }
 
   /*
    * Get description - yeah, really ! (useful documentation)
    */
-  override def getDescription: Description = {
+  override def getDescription: Description =
     RudderResourceModelSourceFactory.DESC
-  }
 
 }
 
@@ -211,23 +207,22 @@ object RudderResourceModelSourceFactory {
    * etc.
    */
   def configFromProperties(prop: Properties): Failable[Configuration] = {
-    def getTProp[T](key: String, trans: String => T): Failable[T] = {
+    def getTProp[T](key: String, trans: String => T): Failable[T] =
       prop.getProperty(key) match {
         case null  =>
           Left(
             ErrorMsg(s"The property for mandatory key '${key}' was not found")
           )
         case value =>
-          try {
+          try
             Right(trans(value))
-          } catch {
+          catch {
             case ex: Exception =>
               Left(
                 ErrorMsg(s"Error when converting ${key}: '${value}'", Some(ex))
               )
           }
       }
-    }
     def getProp(key: String): Failable[String] = getTProp(key, identity)
 
     for {
