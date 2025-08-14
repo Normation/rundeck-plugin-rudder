@@ -52,7 +52,7 @@ class RudderResourceModelSourceFactory(framework: Framework)
    */
   override def createResourceModelSource(
       properties: Properties
-  ): RudderResourceModelSource = {
+  ): RudderResourceModelSource =
     RudderResourceModelSourceFactory.configFromProperties(properties) match {
       case Left(ErrorMsg(msg, optex)) =>
         optex match {
@@ -62,19 +62,17 @@ class RudderResourceModelSourceFactory(framework: Framework)
 
       case Right(config) =>
         logger.info(
-          s"Rudder ressource module initialized. Nodes will be fetch at URL ${config.url.nodesApi} " +
+          s"Rudder resource module initialized. Nodes will be fetched at URL ${config.url.nodesApi} " +
             s"with a refresh rate of ${config.refreshInterval.secondes}s"
         )
         new RudderResourceModelSource(config)
     }
-  }
 
   /*
    * Get description - yeah, really ! (useful documentation)
    */
-  override def getDescription: Description = {
+  override def getDescription: Description =
     RudderResourceModelSourceFactory.DESC
-  }
 
 }
 
@@ -209,23 +207,22 @@ object RudderResourceModelSourceFactory {
    * etc.
    */
   def configFromProperties(prop: Properties): Failable[Configuration] = {
-    def getTProp[T](key: String, trans: String => T): Failable[T] = {
+    def getTProp[T](key: String, trans: String => T): Failable[T] =
       prop.getProperty(key) match {
         case null  =>
           Left(
             ErrorMsg(s"The property for mandatory key '${key}' was not found")
           )
         case value =>
-          try {
+          try
             Right(trans(value))
-          } catch {
+          catch {
             case ex: Exception =>
               Left(
                 ErrorMsg(s"Error when converting ${key}: '${value}'", Some(ex))
               )
           }
       }
-    }
     def getProp(key: String): Failable[String] = getTProp(key, identity)
 
     for {

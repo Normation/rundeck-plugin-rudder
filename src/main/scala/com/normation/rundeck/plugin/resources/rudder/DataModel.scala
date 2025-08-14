@@ -102,11 +102,11 @@ case class Node(
     id: String,
     hostname: String,
     status: String,
-    architectureDescription: String, // optional in the Rudder API, but required here
+    architectureDescription: Option[String],
     ipAddresses: Seq[String],
-    lastInventoryDate: String, // optional in the Rudder API, but required here
-    os: Os, // optional in the Rudder API, but required here
-    policyServerId: String, // optional in the Rudder API, but required here
+    lastInventoryDate: Option[String],
+    os: Option[Os],
+    policyServerId: Option[String],
     properties: Seq[Property],
     ram: Option[Int],
     accounts: Option[Seq[String]],
@@ -155,3 +155,12 @@ final case class Group(
  */
 
 final case class ErrorMsg(value: String, exception: Option[Throwable] = None)
+
+extension (self: ErrorMsg)
+  private def append(nextErrMsg: ErrorMsg): ErrorMsg =
+    ErrorMsg(
+      (self.value + "\n" + nextErrMsg.value),
+      nextErrMsg.exception match
+        case Some(ex) => Some(ex)
+        case None     => self.exception
+    )

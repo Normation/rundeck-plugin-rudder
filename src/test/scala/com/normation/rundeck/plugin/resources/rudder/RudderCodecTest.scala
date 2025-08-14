@@ -117,14 +117,16 @@ class RudderCodecTest extends ZIOSpecDefault {
                 id = "root",
                 hostname = "server.rudder.local",
                 status = "accepted",
-                os = Os(
-                  `type` = "Linux",
-                  name = "Debian",
-                  version = "12",
-                  fullName = "Debian GNU/Linux 12 (bookworm)",
-                  kernelVersion = "6.1.0-37-amd64"
+                os = Some(
+                  Os(
+                    `type` = "Linux",
+                    name = "Debian",
+                    version = "12",
+                    fullName = "Debian GNU/Linux 12 (bookworm)",
+                    kernelVersion = "6.1.0-37-amd64"
+                  )
                 ),
-                architectureDescription = "x86_64",
+                architectureDescription = Some("x86_64"),
                 ram = Some(2062548992),
                 ipAddresses = List(
                   "0:0:0:0:0:0:0:1",
@@ -134,8 +136,8 @@ class RudderCodecTest extends ZIOSpecDefault {
                   "fe80:0:0:0:a00:27ff:fe8d:c04d",
                   "10.0.2.15"
                 ),
-                lastInventoryDate = "2025-08-08T05:55:12Z",
-                policyServerId = "root",
+                lastInventoryDate = Some("2025-08-08T05:55:12Z"),
+                policyServerId = Some("root"),
                 properties = List(Property("prop", "prop_value")),
                 environmentVariables = Some(Map.apply(("envKey", "envVal"))),
                 accounts = None,
@@ -180,8 +182,7 @@ class RudderCodecTest extends ZIOSpecDefault {
           |        "description": "",
           |        "acceptanceDate": "2025-04-02T12:46:58Z",
           |        "lastInventoryDate": "2025-08-08T05:55:12Z",
-          |        "policyServerId": "root",
-          |        "properties": []
+          |        "policyServerId": "root"
           |      }
           |    ]
           |  }
@@ -189,7 +190,7 @@ class RudderCodecTest extends ZIOSpecDefault {
           |""".stripMargin
 
         val decoded = json.fromJson[RudderNodeResponse]
-        val errMsg = ".data.nodes[0].os(missing)"
+        val errMsg = ".data.nodes[0].properties(missing)"
 
         assert(decoded)(isLeft(equalTo(errMsg)))
 
@@ -204,8 +205,6 @@ class RudderCodecTest extends ZIOSpecDefault {
             |      {
             |        "id": "root",
             |        "hostname": "server.rudder.local",
-            |        "status": "accepted",
-            |        "state": "enabled",
             |        "ram": 2062548992,
             |        "machine": {
             |          "id": "63a9f0ea-7bb9-8050-796b-649e85481845",
@@ -221,12 +220,6 @@ class RudderCodecTest extends ZIOSpecDefault {
             |          "fullName": "Debian GNU/Linux 12 (bookworm)",
             |          "kernelVersion": "6.1.0-37-amd64"
             |        },
-            |        "ipAddresses": [
-            |          "0:0:0:0:0:0:0:1",
-            |          "127.0.0.1",
-            |          "192.168.4.2",
-            |          "10.0.2.15"
-            |        ],
             |        "description": "",
             |        "acceptanceDate": "2025-04-02T12:46:58Z",
             |        "policyServerId": "root",
@@ -238,7 +231,7 @@ class RudderCodecTest extends ZIOSpecDefault {
             |""".stripMargin
 
         val decoded = json.fromJson[RudderNodeResponse]
-        val errMsg = ".data.nodes[0].architectureDescription(missing)"
+        val errMsg = ".data.nodes[0].status(missing)"
 
         assert(decoded)(isLeft(equalTo(errMsg)))
 

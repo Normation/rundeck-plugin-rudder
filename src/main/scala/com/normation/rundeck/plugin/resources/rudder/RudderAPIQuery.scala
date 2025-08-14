@@ -17,6 +17,7 @@
 package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
+import org.slf4j.LoggerFactory
 import zio.Chunk
 import zio.IO
 import zio.ZIO
@@ -45,6 +46,8 @@ import zio.json.ast.Json
  * done, how the results are displayed, etc.).
  */
 object RudderAPIQuery {
+
+  private lazy val logger = LoggerFactory.getLogger(this.getClass)
 
   /*
    * The list of sub-categories of details to include
@@ -99,12 +102,25 @@ object RudderAPIQuery {
 
       json <- body.fromJson[RudderNodeResponse] match
         case Left(errMsg)    => ErrorMsg(errMsg).fail
-        case Right(nodeList) =>
-          nodeList.data.nodes
-            .map(node => (NodeId(node.id), extractNode(node, config)))
-            .toMap
-            .succeed
-    } yield json
+        case Right(nodeList) => nodeList.data.nodes.succeed
+
+      map <- ZIO.foldLeft(json)(Map.empty[NodeId, NodeEntryImpl])((map, node) =>
+        extractNode(node, config)
+          .map { nodeEntry =>
+            logger.info(
+              s"Successfully imported Rudder node with id \'${node.id}\'."
+            )
+            map + ((NodeId(node.id), nodeEntry))
+          }
+          .mapError { err =>
+            logger.error(
+              s"Error during import of Rudder node with id \'${node.id}\' : ${err.value}"
+            )
+            err
+          }
+      )
+    } yield map
+
   }
 
   /**
@@ -118,129 +134,159 @@ object RudderAPIQuery {
   def extractNode(
       rudderNode: Node,
       config: Configuration
-  ): NodeEntryImpl = {
+  ): ZIO[Any, ErrorMsg, NodeEntryImpl] = {
 
-    val env = rudderNode.environmentVariables match
-      case Some(map) => map
-      case None      => Map.empty
-
-    val rundeckUser = config.envVarRundeckUser
-      .flatMap(v => env.get(v))
-      .getOrElse(config.rundeckDefaultUser)
-
-    val sslPort = config.envVarSSLPort
-      .flatMap(v => env.get(v))
-      .getOrElse(config.sshDefaultPort.toString)
-
-    val node = NodeEntryImpl()
-
-    // Mandatory attributes
-    node.setNodename(rudderNode.hostname + " " + rudderNode.id)
-    node.setHostname(rudderNode.hostname + ":" + sslPort)
-    node.setOsName(rudderNode.os.name)
-    node.setOsFamily(rudderNode.os.`type`)
-    node.setOsArch(rudderNode.architectureDescription)
-    node.setOsVersion(rudderNode.os.version)
-    node.setUsername(rundeckUser)
-    node.getAttributes.put("rudder_information:id", rudderNode.id)
-    node.getAttributes.put(
-      "rudder_information:node_direct_url",
-      config.url.nodeUrl(NodeId(rudderNode.id))
-    )
-    node.getAttributes.put(
-      "rudder_information:policy_server_id",
-      rudderNode.policyServerId
-    )
-    node.getAttributes.put(
-      "rudder_information:last_inventory_date",
-      rudderNode.lastInventoryDate
-    )
-    node.getAttributes.put("rudder_information:node_status", rudderNode.status)
-
-    // Optional attributes
-
-    node.setDescription(rudderNode.os.fullName)
-    rudderNode.ram.foreach { ram =>
-      node.getAttributes.put("total_ram", ram.toString)
-    }
-    node.getAttributes.put(
-      "ip_addresses",
-      rudderNode.ipAddresses.mkString(", ")
-    )
-    rudderNode.properties.foreach { case Property(name, value) =>
-      node.getAttributes.put(s"rudder_node_properties:$name", value)
-    }
-    rudderNode.accounts.foreach { accounts =>
-      node.getAttributes.put("accounts_on_server", accounts.mkString(", "))
-    }
-    env.map((k, v) =>
-      node.getAttributes.put(s"rudder_environment_variables:$k", v)
-    )
-
-    // network interfaces
-    rudderNode.networkInterfaces.foreach(_.foreach { i =>
-      i.asObject.foreach(json =>
-        json.get("name").flatMap(_.asString).foreach { name =>
-          json
-            .get("ipAddresses")
-            .flatMap(_.as[Seq[String]].toOption)
-            .foreach(ips =>
-              node.getAttributes.put(
-                s"rudder_network_interface:$name:ip_addresses",
-                ips.mkString(", ")
-              )
+    for {
+      (os, architectureDescription, policyServerId, lastInventoryDate) <- (
+        rudderNode.os,
+        rudderNode.architectureDescription,
+        rudderNode.policyServerId,
+        rudderNode.lastInventoryDate
+      ) match
+        case (Some(o), Some(a), Some(p), Some(l)) =>
+          (o, a, p, l).succeed
+        case (o, a, p, l)                         =>
+          Seq(
+            o.toRequiredFieldError("os"),
+            a.toRequiredFieldError("architectureDescription"),
+            p.toRequiredFieldError("policyServerId"),
+            l.toRequiredFieldError("lastInventoryDate")
+          ).foldLeft(
+            ErrorMsg(
+              s"Rudder node with id \'${rudderNode.id}\' is missing one or more required fields : "
             )
+          )((accErrMsg, nextErrMsgOpt) =>
+            nextErrMsgOpt match
+              case Some(nextErrMsg) => accErrMsg.append(nextErrMsg)
+              case None             => accErrMsg
+          ).fail
+    } yield {
 
-          json
-            .filterKeys(k => k != "name" && k != "ipAddresses")
-            .fields
-            .foreach { (k, v) =>
-              v.asSimpleField.foreach(value =>
+      val env = rudderNode.environmentVariables match
+        case Some(map) => map
+        case None      => Map.empty
+
+      val rundeckUser = config.envVarRundeckUser
+        .flatMap(v => env.get(v))
+        .getOrElse(config.rundeckDefaultUser)
+
+      val sslPort = config.envVarSSLPort
+        .flatMap(v => env.get(v))
+        .getOrElse(config.sshDefaultPort.toString)
+
+      val node = NodeEntryImpl()
+
+      // Mandatory attributes
+      node.setNodename(rudderNode.hostname + " " + rudderNode.id)
+      node.setHostname(rudderNode.hostname + ":" + sslPort)
+      node.setOsName(os.name)
+      node.setOsFamily(os.`type`)
+      node.setOsArch(architectureDescription)
+      node.setOsVersion(os.version)
+      node.setUsername(rundeckUser)
+      node.getAttributes.put("rudder_information:id", rudderNode.id)
+      node.getAttributes.put(
+        "rudder_information:node_direct_url",
+        config.url.nodeUrl(NodeId(rudderNode.id))
+      )
+      node.getAttributes.put(
+        "rudder_information:policy_server_id",
+        policyServerId
+      )
+      node.getAttributes.put(
+        "rudder_information:last_inventory_date",
+        lastInventoryDate
+      )
+      node.getAttributes.put(
+        "rudder_information:node_status",
+        rudderNode.status
+      )
+
+      // Optional attributes
+
+      node.setDescription(os.fullName)
+      rudderNode.ram.foreach { ram =>
+        node.getAttributes.put("total_ram", ram.toString)
+      }
+      node.getAttributes.put(
+        "ip_addresses",
+        rudderNode.ipAddresses.mkString(", ")
+      )
+      rudderNode.properties.foreach { case Property(name, value) =>
+        node.getAttributes.put(s"rudder_node_properties:$name", value)
+      }
+      rudderNode.accounts.foreach { accounts =>
+        node.getAttributes.put("accounts_on_server", accounts.mkString(", "))
+      }
+      env.map((k, v) =>
+        node.getAttributes.put(s"rudder_environment_variables:$k", v)
+      )
+
+      // network interfaces
+      rudderNode.networkInterfaces.foreach(_.foreach { i =>
+        i.asObject.foreach(json =>
+          json.get("name").flatMap(_.asString).foreach { name =>
+            json
+              .get("ipAddresses")
+              .flatMap(_.as[Seq[String]].toOption)
+              .foreach(ips =>
                 node.getAttributes.put(
-                  s"rudder_network_interface:$name:$k",
-                  value.toString
+                  s"rudder_network_interface:$name:ip_addresses",
+                  ips.mkString(", ")
                 )
               )
-            }
-        }
-      )
-    })
 
-    // storage
-    rudderNode.storage.foreach(_.foreach { disk =>
-      disk.asObject.foreach(json =>
-        json.get("name").flatMap(_.asString).foreach { name =>
-          json
-            .filterKeys(k => k != "name")
-            .fields
-            .foreach { (k, v) =>
-              v.asSimpleField.foreach(value =>
-                node.getAttributes
-                  .put(s"rudder_storage:$name:$k", value.toString)
-              )
-            }
-        }
-      )
-    })
+            json
+              .filterKeys(k => k != "name" && k != "ipAddresses")
+              .fields
+              .foreach { (k, v) =>
+                v.asSimpleField.foreach(value =>
+                  node.getAttributes.put(
+                    s"rudder_network_interface:$name:$k",
+                    value.toString
+                  )
+                )
+              }
+          }
+        )
+      })
 
-    // file systems
-    rudderNode.fileSystems.foreach(_.foreach { fs =>
-      fs.asObject.foreach(json =>
-        json.get("name").flatMap(_.asString).foreach { name =>
-          json
-            .filterKeys(k => k != "name")
-            .fields
-            .foreach { (k, v) =>
-              v.asSimpleField.foreach(value =>
-                node.getAttributes
-                  .put(s"rudder_file_system:$name:$k", value.toString)
-              )
-            }
-        }
-      )
-    })
+      // storage
+      rudderNode.storage.foreach(_.foreach { disk =>
+        disk.asObject.foreach(json =>
+          json.get("name").flatMap(_.asString).foreach { name =>
+            json
+              .filterKeys(k => k != "name")
+              .fields
+              .foreach { (k, v) =>
+                v.asSimpleField.foreach(value =>
+                  node.getAttributes
+                    .put(s"rudder_storage:$name:$k", value.toString)
+                )
+              }
+          }
+        )
+      })
 
-    node
+      // file systems
+      rudderNode.fileSystems.foreach(_.foreach { fs =>
+        fs.asObject.foreach(json =>
+          json.get("name").flatMap(_.asString).foreach { name =>
+            json
+              .filterKeys(k => k != "name")
+              .fields
+              .foreach { (k, v) =>
+                v.asSimpleField.foreach(value =>
+                  node.getAttributes
+                    .put(s"rudder_file_system:$name:$k", value.toString)
+                )
+              }
+          }
+        )
+      })
+
+      node
+    }
   }
 
   extension (self: Json)
@@ -249,5 +295,14 @@ object RudderAPIQuery {
         .as[String]
         .orElse(self.as[Int])
         .orElse(self.as[Boolean])
+
+  extension [A](self: Option[A])
+    private def toRequiredFieldError(
+        fieldName: String
+    ): Option[ErrorMsg] =
+      self match
+        case Some(value) => None
+        case None        =>
+          Some(ErrorMsg(s"Required field \"${fieldName}\" is missing"))
 
 }

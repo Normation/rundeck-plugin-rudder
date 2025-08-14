@@ -78,7 +78,7 @@
               <Rundeck-Plugin-File-Version>0.1-SNAPSHOT</Rundeck-Plugin-File-Version>
               <Rundeck-Plugin-Archive>true</Rundeck-Plugin-Archive>
               <Rundeck-Plugin-Classnames>com.normation.rundeck.plugin.resources.rudder.RudderResourceModelSourceFactory</Rundeck-Plugin-Classnames>
-              <Rundeck-Plugin-Libs>lib/bcpkix-jdk18on lib/bcprov-jdk18on lib/bcutil-jdk18on lib/iron_3 lib/izumi-reflect_3 lib/izumi-reflect-thirdparty-boopickle-shaded_3 lib/magnolia_3 lib/netty-buffer lib/netty-codec-base lib/netty-codec-compression lib/netty-codec-http lib/netty-codec-socks lib/netty-common lib/netty-handler lib/netty-handler-proxy lib/netty-pkitesting lib/netty-resolver lib/netty-transport-classes-epoll lib/netty-transport-classes-kqueue lib/netty-transport lib/netty-transport-native-epoll lib/netty-transport-native-kqueue lib/netty-transport-native-unix-common lib/portable-scala-reflect_2.13 lib/scala3-library_3 lib/scala-collection-compat_3 lib/scala-library lib/unroll-annotation_3 lib/zio_3 lib/zio-config_3 lib/zio-constraintless_3 lib/zio-http_3 lib/zio-internal-macros_3 lib/zio-json_3 lib/zio-prelude_3 lib/zio-prelude-macros_3 lib/zio-schema_3 lib/zio-schema-derivation_3 lib/zio-schema-json_3 lib/zio-schema-macros_3 lib/zio-schema-protobuf_3 lib/zio-stacktracer_3 lib/zio-streams_3 lib/zio-test_3.jar</Rundeck-Plugin-Libs>
+              <Rundeck-Plugin-Libs>lib/bcpkix-jdk18on lib/bcprov-jdk18on lib/bcutil-jdk18on lib/iron_3 lib/izumi-reflect_3 lib/izumi-reflect-thirdparty-boopickle-shaded_3 lib/magnolia_3 lib/netty-buffer lib/netty-codec-base lib/netty-codec-compression lib/netty-codec-http lib/netty-codec-socks lib/netty-common lib/netty-handler lib/netty-handler-proxy lib/netty-pkitesting lib/netty-resolver lib/netty-transport-classes-epoll lib/netty-transport-classes-kqueue lib/netty-transport lib/netty-transport-native-epoll lib/netty-transport-native-kqueue lib/netty-transport-native-unix-common lib/portable-scala-reflect_2.13 lib/scala3-library_3 lib/scala-collection-compat_3 lib/scala-library lib/unroll-annotation_3 lib/zio_3 lib/zio-config_3 lib/zio-constraintless_3 lib/zio-http_3 lib/zio-internal-macros_3 lib/zio-json_3 lib/zio-prelude_3 lib/zio-prelude-macros_3 lib/zio-schema_3 lib/zio-schema-derivation_3 lib/zio-schema-json_3 lib/zio-schema-macros_3 lib/zio-schema-protobuf_3 lib/zio-stacktracer_3 lib/zio-streams_3 lib/zio-test_3.jar lib/slf4j-api lib/slf4j-simple</Rundeck-Plugin-Libs>
             </manifestEntries>
           </archive>
         </configuration>
@@ -128,7 +128,7 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-simple</artifactId>
       <version>2.0.17</version>
-      <scope>provided</scope>
+      <scope>compile</scope>
     </dependency>
     <dependency>
       <groupId>com.softwaremill.magnolia1_3</groupId>

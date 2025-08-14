@@ -26,7 +26,7 @@ import zio.test.junit.ZTestJUnitRunner
 @RunWith(classOf[ZTestJUnitRunner])
 class BuildRundeckNodeTest extends ZIOSpecDefault {
 
-  override def spec: Spec[TestEnvironment & Scope, Any] = {
+  override def spec: Spec[TestEnvironment & Scope, Any] =
     suite("Rundeck node build test")(
       test(
         "a Rundeck node entry should be successfully extracted " +
@@ -36,14 +36,16 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
           id = "root",
           hostname = "server.rudder.local",
           status = "accepted",
-          os = Os(
-            `type` = "Linux",
-            name = "Debian",
-            version = "12",
-            fullName = "Debian GNU/Linux 12 (bookworm)",
-            kernelVersion = "6.1.0-37-amd64"
+          os = Some(
+            Os(
+              `type` = "Linux",
+              name = "Debian",
+              version = "12",
+              fullName = "Debian GNU/Linux 12 (bookworm)",
+              kernelVersion = "6.1.0-37-amd64"
+            )
           ),
-          architectureDescription = "x86_64",
+          architectureDescription = Some("x86_64"),
           ram = Some(2062548992),
           ipAddresses = List(
             "0:0:0:0:0:0:0:1",
@@ -51,8 +53,8 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
             "192.168.4.2",
             "10.0.2.15"
           ),
-          lastInventoryDate = "2025-08-08T05:55:12Z",
-          policyServerId = "root",
+          lastInventoryDate = Some("2025-08-08T05:55:12Z"),
+          policyServerId = Some("root"),
           properties = List(),
           environmentVariables = None,
           accounts = None,
@@ -103,8 +105,9 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
         expected.getAttributes.put("rudder_information:node_status", "accepted")
         expected.getAttributes.put("total_ram", "2062548992")
 
-        assert(converted.getAttributes)(equalTo(expected.getAttributes))
+        assertZIO(converted.map(_.getAttributes))(
+          equalTo(expected.getAttributes)
+        )
       }
     )
-  }
 }
