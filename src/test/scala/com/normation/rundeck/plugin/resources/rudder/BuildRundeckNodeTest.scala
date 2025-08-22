@@ -18,6 +18,8 @@ package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.junit.runner.RunWith
+import zio.Chunk
+import zio.Exit
 import zio.Scope
 import zio.test.*
 import zio.test.Assertion.*
@@ -47,7 +49,7 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
           ),
           architectureDescription = Some("x86_64"),
           ram = Some(2062548992),
-          ipAddresses = List(
+          ipAddresses = Chunk(
             "0:0:0:0:0:0:0:1",
             "127.0.0.1",
             "192.168.4.2",
@@ -55,7 +57,7 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
           ),
           lastInventoryDate = Some("2025-08-08T05:55:12Z"),
           policyServerId = Some("root"),
-          properties = List(),
+          properties = Chunk.empty,
           environmentVariables = None,
           accounts = None,
           networkInterfaces = None,
@@ -107,6 +109,127 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
 
         assertZIO(converted.map(_.getAttributes))(
           equalTo(expected.getAttributes)
+        )
+      },
+      test(
+        "a Rundeck node entry should not be extracted successfully " +
+          "from a valid Rudder node that is missing attributes that are required in Rundeck"
+      ) {
+        val rudderNode = Node(
+          id = "root",
+          hostname = "server.rudder.local",
+          status = "accepted",
+          os = None,
+          architectureDescription = None,
+          ram = Some(2062548992),
+          ipAddresses = Chunk(
+            "0:0:0:0:0:0:0:1",
+            "127.0.0.1",
+            "192.168.4.2",
+            "10.0.2.15"
+          ),
+          lastInventoryDate = None,
+          policyServerId = Some("policyServerId"),
+          properties = Chunk.empty,
+          environmentVariables = None,
+          accounts = None,
+          networkInterfaces = None,
+          storage = None,
+          fileSystems = None
+        )
+
+        val mockConfig = Configuration(
+          url = RudderUrl("http://127.0.0.1:8080/rudder", ApiLatest),
+          apiToken = "apiToken",
+          apiTimeout = TimeoutInterval(0),
+          checkCertificate = false,
+          refreshInterval = TimeoutInterval(0),
+          sshDefaultPort = 8080,
+          envVarSSLPort = None,
+          rundeckDefaultUser = "rundeck",
+          envVarRundeckUser = None
+        )
+        val converted = RudderAPIQuery.extractNode(rudderNode, mockConfig).exit
+        val errorMsg =
+          "Rudder node with id 'root' is missing one or more required fields : \n" +
+            "Required field \"os\" is missing\n" +
+            "Required field \"architectureDescription\" is missing\n" +
+            "Required field \"lastInventoryDate\" is missing"
+
+        assertZIO(converted)(equalTo(Exit.fail(ErrorMsg(errorMsg, None))))
+      },
+      test(
+        "a Rudder node that is imported into Rundeck should belong to the expected Rudder groups"
+      ) {
+
+        val groups = Seq(
+          Group(
+            id = GroupId("my-group"),
+            displayName = "my-group",
+            nodeIds = Set(NodeId("root")),
+            enabled = true,
+            dynamic = true
+          ),
+          Group(
+            id = GroupId("other-group"),
+            displayName = "other-group",
+            nodeIds = Set(NodeId("A")),
+            enabled = true,
+            dynamic = true
+          ),
+          Group(
+            id = GroupId("yet-another-group"),
+            displayName = "yet-another-group",
+            nodeIds = Set(NodeId("root"), NodeId("A")),
+            enabled = true,
+            dynamic = false
+          ),
+          Group(
+            id = GroupId("all-nodes-with-cfengine-agent"),
+            displayName = "All Linux Nodes",
+            nodeIds = Set(
+              NodeId("root"),
+              NodeId("B"),
+              NodeId("A")
+            ),
+            enabled = true,
+            dynamic = true
+          ),
+          Group(
+            id = GroupId("hasPolicyServer-root"),
+            displayName = "All Linux Nodes managed by root policy server",
+            nodeIds = Set(NodeId("root")),
+            enabled = true,
+            dynamic = true
+          )
+        )
+
+        val groupsForNode =
+          RudderResourceModelSource
+            .getGroupForNode(groups)
+            .view
+            .mapValues(_.map(_.id))
+            .toMap
+
+        assert(groupsForNode)(
+          equalTo(
+            Map(
+              NodeId("root") -> Seq(
+                GroupId("my-group"),
+                GroupId("yet-another-group"),
+                GroupId("all-nodes-with-cfengine-agent"),
+                GroupId("hasPolicyServer-root")
+              ),
+              NodeId("A") -> Seq(
+                GroupId("other-group"),
+                GroupId("yet-another-group"),
+                GroupId("all-nodes-with-cfengine-agent")
+              ),
+              NodeId("B") -> Seq(
+                GroupId("all-nodes-with-cfengine-agent")
+              )
+            )
+          )
         )
       }
     )

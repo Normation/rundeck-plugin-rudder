@@ -37,6 +37,9 @@ object RudderAPIQueryIT extends ZIOAppDefault {
       _ <- RudderAPIQuery
         .queryNodes(config)
         .debug
+      groups <- RudderAPIQuery
+        .queryGroups(config)
+        .debug
     } yield ()
 
   override def run: ZIO[Any & ZIOAppArgs & Scope, Any, Any] =

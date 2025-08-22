@@ -142,10 +142,10 @@ object RudderResourceModelSourceFactory {
       PropertyUtil.select(
         API_VERSION,
         "API version",
-        "The API version to use for rundeck. You should use 'latest' appart for compat with older Rudder up to 7.x where version should be '12'",
+        "The API version to use for rundeck. You should use 'latest'",
         true,
         "latest",
-        Seq("latest", "12").asJava
+        Seq("latest").asJava
       )
     )
     .property(
@@ -259,12 +259,11 @@ object RudderResourceModelSourceFactory {
       apiVersion <- getProp(API_VERSION).fold(
         Left(_),
         {
-          case "12"      => Right(ApiV12)
           case "latest"  => Right(ApiLatest)
           case x: String =>
             Left(
               ErrorMsg(
-                s"The API version '${x}' is not authorized, only accepting '12' or 'latest'"
+                s"API version '${x}' is not authorized, only accepting 'latest'"
               )
             )
         }
