@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Normation (http://normation.com)
+ * Copyright 2025 Normation (http://normation.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,10 @@
  */
 
 package com.normation.rundeck.plugin.resources.rudder
+
+import zio.*
+import zio.json.*
+import zio.json.ast.Json
 
 /**
  * This file contains data structure definition for our model.
@@ -46,10 +50,9 @@ case object ApiLatest extends ApiVersion { val value = "latest" }
  */
 final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
-  private[this] val url = {
+  private val url =
     if (baseUrl.endsWith("/")) baseUrl.substring(0, baseUrl.length - 1)
     else baseUrl
-  }
 
   // endpoint for groups API (only need all of them)
   def groupsApi = s"${url}/api/latest/groups"
@@ -63,11 +66,11 @@ final case class RudderUrl(baseUrl: String, version: ApiVersion) {
     s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
 }
 
-/*
- * Simple class for duration, with a ms variant !
- */
-final case class TimeoutInterval(secondes: Int) {
-  val ms = secondes * 1000L
+final case class TimeoutInterval(seconds: Int) {
+  val ms: Long = seconds * 1000L
+}
+object TimeoutInterval {
+  given Conversion[TimeoutInterval, zio.Duration] = _.seconds.seconds
 }
 
 /*
@@ -82,7 +85,7 @@ final case class Configuration(
     apiToken: String,
     apiTimeout: TimeoutInterval,
     checkCertificate: Boolean,
-    refreshInterval: TimeoutInterval, // time in ms, should never be < 5000ms
+    refreshInterval: TimeoutInterval, // should never be < 5000ms
     sshDefaultPort: Int,
     envVarSSLPort: Option[String],
     rundeckDefaultUser: String,
@@ -93,6 +96,42 @@ final case class Configuration(
 
 //Rudder node ID, used as key to synchro nodes
 final case class NodeId(value: String)
+
+case class Data(nodes: Seq[Node]) derives JsonDecoder
+
+case class Node(
+    id: String,
+    hostname: String,
+    status: String,
+    architectureDescription: Option[String],
+    ipAddresses: Seq[String],
+    lastInventoryDate: Option[String],
+    os: Option[Os],
+    policyServerId: Option[String],
+    properties: Seq[Property],
+    ram: Option[Int],
+    accounts: Option[Seq[String]],
+    environmentVariables: Option[Map[String, String]],
+    networkInterfaces: Option[Seq[Json]],
+    storage: Option[Seq[Json]],
+    fileSystems: Option[Seq[Json]]
+) derives JsonDecoder
+
+case class Property(name: String, value: String) derives JsonDecoder
+
+case class Os(
+    `type`: String,
+    name: String,
+    version: String,
+    fullName: String,
+    kernelVersion: String
+) derives JsonDecoder
+
+case class RudderNodeResponse(
+    action: String,
+    result: String,
+    data: Data
+) derives JsonDecoder
 
 //notice: for nodes, we directly use rundeck
 //NodeEntryImpl, interfacing is much easier.
@@ -112,10 +151,8 @@ final case class Group(
 //////////////////////////////// Error container ////////////////////////////////
 
 /**
- * All the method that can fail are of the Failable[T] type (defined in
- * package.scala, alias to Either[ErrorMsg,T]). ErrorMsg is just a container for
- * an Error, with an human readable message, and optionnaly the root exception
- * which caused it.
+ * ErrorMsg is a container for an Error with a human-readable message, and
+ * optionally the root exception that caused the error.
  */
 
 final case class ErrorMsg(value: String, exception: Option[Throwable] = None)
