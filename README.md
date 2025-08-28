@@ -1,7 +1,7 @@
 Rundeck Rudder Nodes Plugin
 ===========================
 
-This is a Resource Model Source plugin for [Rundeck][] 3.3.x and up that provides Rudder nodes as nodes for the Rundeck server.
+This is a Resource Model Source plugin for [Rundeck][] 4.0.0 and up that provides Rudder nodes as nodes for the Rundeck server.
 
 [Rundeck]: https://www.rundeck.com/
 
@@ -15,17 +15,23 @@ Download the latest `rundeck-rudder-nodes-plugin-X.Y.jar` from the [releases pag
 
 Alternatively, you can build the project from source with Maven (`mvn install`) and use the resulting jar from your local repository (see Maven console output for the exact location).
 
-> **_NOTE:_** This plugin is old, and requires JDK 1.8.X and Maven 3.3.3
+> **_NOTE:_** Building this plugin requires JDK 11, Scala 3.7.X, and Maven 3.9.Y 
 
-In order to install the plugin in Rundeck, open the **System** menu (gear icon on the **top right**) > **Plugins** > **Upload plugin**.
+> **_WARNING:_** The size of the plugin `.jar` (~40MB) will likely exceed the maximum file size that can be uploaded from the web interface of Rundeck (26MB). In order to import the plugin, you can either :
+> * Manually copy the `.jar` into the plugin directory (Launcher: `$RDECK_BASE/libext`, RPM,DEB: `/var/lib/rundeck/libext`) of your Rundeck server. If you are running Rundeck from a Docker container, you can copy it with `docker cp` :
+> ```
+> $ docker cp target/rundeck-rudder-nodes-plugin-X.Y.jar my-rundeck:$RDECK_BASE/libext/rundeck-rudder-nodes-plugin-X.Y.jar # Launcher
+> ```
+> ```
+> $ docker cp target/rundeck-rudder-nodes-plugin-X.Y.jar my-rundeck:$/var/lib/rundeck/libext/rundeck-rudder-nodes-plugin-X.Y.jar # RPM, DEB
+> ```
+> * [Override the maximum upload size](https://github.com/rundeck/rundeck/pull/3477) in the `rundeck-config.properties` file.
+> You should then be able to upload the plugin from the web interface : open the **System** menu (gear icon on the **top right**) > **Plugins** > **Upload plugin**, and upload the plugin `.jar`.
+> 
+> ![Navigating to the plugin installation page](readme-resources/installation_1.png)
+> ![Uploading the plugin jar file](readme-resources/installation_2.png)
 
-![Navigating to the plugin installation page](readme-resources/installation_1.png)
-
-You can now upload the plugin `.jar` file.
-
-![Uploading the plugin jar file](readme-resources/installation_2.png)
-
-When you navigate to the **System** > **Plugins** > **Installed plugins** page, the Rudder Resources plugin should appear.
+Whichever way you choose to install it, the Rudder Resources plugin should now appear when you navigate to the **System** > **Plugins** > **Installed plugins** page.
 
 ![The Rudder Resources plugin appears in the installed plugins list](readme-resources/installation_3.png)
 
