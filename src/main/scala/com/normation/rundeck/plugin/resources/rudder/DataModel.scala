@@ -19,6 +19,9 @@ package com.normation.rundeck.plugin.resources.rudder
 import zio.*
 import zio.json.*
 import zio.json.ast.Json
+import zio.schema.DeriveSchema
+import zio.schema.Schema
+import zio.schema.derived
 
 /**
  * This file contains data structure definition for our model.
@@ -34,13 +37,11 @@ import zio.json.ast.Json
 sealed trait ApiVersion { def value: String }
 
 /*
- * Rationnal to not use "latest" in place of 12.
  * If you use latest with Rudder 4.x, you
  * will have a clear error, nothing works => change version.
  * Auto API upgrade are not relevant, since the plugin won't
  * take advantage of them without an update.
  */
-case object ApiV12 extends ApiVersion { val value = "12" }
 case object ApiLatest extends ApiVersion { val value = "latest" }
 
 /*
@@ -59,11 +60,11 @@ final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
   // endpoint for nodes API - all of them, or just one
   def nodesApi = s"${url}/api/${version.value}/nodes"
-  def nodeApi(id: NodeId): String = nodesApi + "/" + id.value
+  def nodeApi(id: NodeId): String = nodesApi + "/" + id
 
   // node details on Rudder web UI
   def nodeUrl(id: NodeId) =
-    s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id.value}"}"""
+    s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id}"}"""
 }
 
 final case class TimeoutInterval(seconds: Int) {
@@ -94,28 +95,34 @@ final case class Configuration(
 
 //////////////////////////////// Nodes and Groups ////////////////////////////////
 
-//Rudder node ID, used as key to synchro nodes
-final case class NodeId(value: String)
+//Rudder node ID, used as key to find which nodes belong a given group
+opaque type NodeId = String
+object NodeId {
+  def apply(string: String): NodeId = string
+  given decoder: JsonDecoder[NodeId] = JsonDecoder.string
+  given schema: Schema[NodeId] = Schema.primitive[String]
+}
 
-case class Data(nodes: Seq[Node]) derives JsonDecoder
+case class NodeData(nodes: Chunk[Node]) derives JsonDecoder, Schema
 
 case class Node(
     id: String,
     hostname: String,
     status: String,
     architectureDescription: Option[String],
-    ipAddresses: Seq[String],
+    ipAddresses: Chunk[String],
     lastInventoryDate: Option[String],
     os: Option[Os],
     policyServerId: Option[String],
-    properties: Seq[Property],
+    properties: Chunk[Property],
     ram: Option[Int],
-    accounts: Option[Seq[String]],
+    accounts: Option[Chunk[String]],
     environmentVariables: Option[Map[String, String]],
-    networkInterfaces: Option[Seq[Json]],
-    storage: Option[Seq[Json]],
-    fileSystems: Option[Seq[Json]]
-) derives JsonDecoder
+    networkInterfaces: Option[Chunk[Json]],
+    storage: Option[Chunk[Json]],
+    fileSystems: Option[Chunk[Json]]
+) derives JsonDecoder,
+      Schema
 
 case class Property(name: String, value: String) derives JsonDecoder
 
@@ -130,23 +137,38 @@ case class Os(
 case class RudderNodeResponse(
     action: String,
     result: String,
-    data: Data
-) derives JsonDecoder
+    data: NodeData
+) derives JsonDecoder,
+      Schema
 
 //notice: for nodes, we directly use rundeck
 //NodeEntryImpl, interfacing is much easier.
 
-// definition of a group, with a type
-// for its id
-final case class GroupId(value: String)
+// definition of a group, with a type for its id
+opaque type GroupId = String
+object GroupId {
+  def apply(string: String): GroupId = string
+  given decoder: JsonDecoder[GroupId] = JsonDecoder.string
+  given schema: Schema[GroupId] = Schema.primitive[String]
+}
+
+case class RudderGroupResponse(
+    action: String,
+    result: String,
+    data: GroupData
+) derives JsonDecoder,
+      Schema
+
+case class GroupData(groups: Chunk[Group]) derives JsonDecoder, Schema
 
 final case class Group(
     id: GroupId,
-    name: String,
+    displayName: String,
     nodeIds: Set[NodeId],
-    enable: Boolean,
+    enabled: Boolean,
     dynamic: Boolean
-)
+) derives JsonDecoder,
+      Schema
 
 //////////////////////////////// Error container ////////////////////////////////
 

@@ -19,11 +19,13 @@ package com.normation.rundeck.plugin.resources.rudder
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
 import zio.Chunk
+import zio.Task
 import zio.ZIO
 import zio.http.*
 import zio.http.Method.GET
-import zio.json.DecoderOps
 import zio.json.ast.Json
+import zio.schema.*
+import zio.schema.codec.JsonCodec.schemaBasedBinaryCodec
 
 /**
  * This file manages the REST query logic. This is where queries to the Rudder
@@ -83,37 +85,29 @@ object RudderAPIQuery {
           )
         )
 
-      body <- response.status match
-        case success: Status.Success =>
-          response.body.asString.orDie
-        case error: Status.Error     =>
-          ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}").fail
-        case status: Status          =>
-          val errMsg =
-            s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
-          ErrorMsg(errMsg).fail
-
-      json <- body.fromJson[RudderNodeResponse] match
-        case Left(errMsg)    => ErrorMsg(errMsg).fail
-        case Right(nodeList) => nodeList.data.nodes.succeed
+      body <- response.processApiResponse().toZIO
+      json <- body
+        .to[RudderNodeResponse]
+        .processDecodingError("node")
 
       /* At this point, the result can no longer be an error :
         The Rudder nodes that cannot be imported into Rundeck will produce a warning log.
         All the other viable nodes will be imported as normal.
        */
       map <- ZIO
-        .foldLeft(json)(Map.empty[NodeId, NodeEntryImpl])((map, node) =>
-          extractNode(node, config)
-            .foldZIO(
-              err =>
-                logger
-                  .warn(
-                    s"Error during import of Rudder node with id \'${node.id}\' : ${err.value}"
-                      + "\nThis node will not be imported."
-                  )
-                  .as(map),
-              nodeEntry => (map + ((NodeId(node.id), nodeEntry))).succeed
-            )
+        .foldLeft(json.data.nodes)(Map.empty[NodeId, NodeEntryImpl])(
+          (map, node) =>
+            extractNode(node, config)
+              .foldZIO(
+                err =>
+                  logger
+                    .warn(
+                      s"Error during import of Rudder node with id \'${node.id}\' : ${err.value}"
+                        + "\nThis node will not be imported."
+                    )
+                    .as(map),
+                nodeEntry => (map + ((NodeId(node.id), nodeEntry))).succeed
+              )
         )
     } yield map
 
@@ -280,6 +274,31 @@ object RudderAPIQuery {
     }
   }
 
+  /**
+   * Query for groups
+   */
+  def queryGroups(config: Configuration): ZIO[Client, ErrorMsg, Seq[Group]] = {
+
+    val url = URL.decode(config.url.groupsApi).toOption.get
+    val headers = Headers(("X-API-Token" -> config.apiToken))
+    val request = Request(method = GET, url = url, headers = headers)
+
+    for {
+      response <- ZClient
+        .batched(request)
+        .mapError(ex =>
+          ErrorMsg(
+            s"Error when trying to get group(s) at url ${url.encode}: " + ex.getMessage,
+            Some(ex)
+          )
+        )
+      body <- response.processApiResponse().toZIO
+      groups <- body
+        .to[RudderGroupResponse]
+        .processDecodingError("group")
+    } yield groups.data.groups
+  }
+
   extension (self: Json)
     private def asSimpleField: Either[String, String | Int | Boolean] =
       self
@@ -293,10 +312,33 @@ object RudderAPIQuery {
         fieldName: String
     ): ErrorMsg =
       field match
-        case Some(_) =>
+        case Some(_) => self
+        case None    =>
           ErrorMsg(
             self.value + "\n" + s"Required field \"${fieldName}\" is missing",
             self.exception
           )
-        case None    => self
+
+  extension (self: Response)
+    private def processApiResponse(): Either[ErrorMsg, Body] =
+      self.status match
+        case success: Status.Success => Right(self.body)
+        case error: Status.Error     =>
+          Left(ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}"))
+        case status: Status          =>
+          val errMsg =
+            s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
+          Left(ErrorMsg(errMsg))
+
+  extension [A](self: Task[A])
+    private def processDecodingError(
+        resourceType: String
+    ): ZIO[Any, ErrorMsg, A] =
+      self.mapError(ex =>
+        ErrorMsg(
+          s"Error during Json decoding of ${resourceType} API query response : "
+            + "the response does not have the expected format",
+          Some(ex)
+        )
+      )
 }

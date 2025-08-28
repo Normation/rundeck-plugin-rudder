@@ -133,7 +133,7 @@ class RudderResourceModelSource(val configuration: Configuration)
             this.lastUpdateTime.set(now)
               *> logger.info(
                 s"Successfully imported Rudder node(s) with id(s) : "
-                  + n.keys.map(_.value).mkString(", ")
+                  + n.keys.mkString(", ")
                   + s"\nSuccessfully imported ${n.size} Rudder node(s)."
               )
               *> this.nodes.set(n.toRundeckNodeSet)
@@ -165,14 +165,15 @@ class RudderResourceModelSource(val configuration: Configuration)
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
     for {
-      groups <- Seq.empty[Group].succeed
-      newNodes <- RudderAPIQuery.queryNodes(config)
+      (groups, newNodes) <-
+        RudderAPIQuery.queryGroups(config)
+          <&> RudderAPIQuery.queryNodes(config)
     } yield {
       import scala.jdk.CollectionConverters._
-      val groupByNode = getGroupForNode(groups)
+      val groupByNode = RudderResourceModelSource.getGroupForNode(groups)
       // add groups
       newNodes.map { case (nodeId, node) =>
-        val groups = groupByNode.getOrElse(nodeId, Seq()).map(_.name)
+        val groups = groupByNode.getOrElse(nodeId, Seq()).map(_.displayName)
         // add groups to both rudder_information and tags.
         val tags = (node.getTags.asScala ++ groups)
         node.setTags(tags.asJava)
@@ -184,7 +185,11 @@ class RudderResourceModelSource(val configuration: Configuration)
       }
     }
 
-  private def getGroupForNode(
+}
+
+object RudderResourceModelSource {
+
+  def getGroupForNode(
       groups: Seq[Group]
   ): Map[NodeId, Seq[Group]] = {
     // group groups by nodes id.
@@ -192,5 +197,4 @@ class RudderResourceModelSource(val configuration: Configuration)
       groups.flatMap(g => g.nodeIds.map(n => (n, g))).groupBy(_._1)
     groupByNodeId.view.mapValues(_.map(_._2)).toMap
   }
-
 }

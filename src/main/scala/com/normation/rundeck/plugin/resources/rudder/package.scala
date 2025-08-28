@@ -28,6 +28,12 @@ package object rudder {
     def succeed: UIO[A] =
       ZIO.succeed(self)
 
+  extension [A](self: Either[ErrorMsg, A])
+    def toZIO: ZIO[Any, ErrorMsg, A] =
+      self match
+        case Left(err)    => err.fail
+        case Right(value) => value.succeed
+
   /**
    * Just a shorthand for our "that method can fail, so Either it returns an
    * error, or the actual type you were looking for" type.
