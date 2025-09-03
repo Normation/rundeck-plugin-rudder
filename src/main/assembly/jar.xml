@@ -43,7 +43,7 @@
             <unpack>false</unpack>
             <useTransitiveDependencies>true</useTransitiveDependencies>
             <!-- We want a simpler output format with just the artificat name, on version, no jar -->
-            <outputFileNameMapping>${artifact.artifactId}<!-- .${artifact.extension} --></outputFileNameMapping>
+            <outputFileNameMapping>${artifact.groupId}:${artifact.artifactId}<!-- .${artifact.extension} --></outputFileNameMapping>
             <excludes/>
             <scope>runtime</scope>
         </dependencySet>

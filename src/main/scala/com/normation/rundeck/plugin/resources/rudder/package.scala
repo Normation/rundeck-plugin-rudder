@@ -22,17 +22,12 @@ import zio.ZIO
 
 package object rudder {
 
+  // Syntactic sugar for ZIO success and failure values
   extension [A](self: A)
     def fail: IO[A, Nothing] =
       ZIO.fail(self)
     def succeed: UIO[A] =
       ZIO.succeed(self)
-
-  extension [A](self: Either[ErrorMsg, A])
-    def toZIO: ZIO[Any, ErrorMsg, A] =
-      self match
-        case Left(err)    => err.fail
-        case Right(value) => value.succeed
 
   /**
    * Just a shorthand for our "that method can fail, so Either it returns an
@@ -40,26 +35,4 @@ package object rudder {
    */
   type Failable[T] = Either[ErrorMsg, T]
 
-  /**
-   * We also define a monadic traversal of a sequence of Failable things for
-   * simplicity.
-   */
-  /*
-  object Traverse {
-    def apply[T, U](
-        seq: Seq[T]
-    )(f: T => Either[ErrorMsg, U]): Failable[Seq[U]] = {
-
-      // that's clearly not the canonical way of doing it!
-      // (simplest way to avoid stack overflow)
-
-      Right(seq.map { x =>
-        f(x) match {
-          case Right(y)  => y
-          case Left(msg) => return Left(msg)
-        }
-      })
-    }
-  }
-   */
 }

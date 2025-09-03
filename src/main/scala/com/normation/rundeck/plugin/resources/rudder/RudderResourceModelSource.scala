@@ -22,20 +22,24 @@ import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.resources.ResourceModelSource
 import com.dtolabs.rundeck.core.resources.ResourceModelSourceException
+import java.net.Socket
+import java.net.http.HttpClient
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLEngine
+import javax.net.ssl.X509ExtendedTrustManager
+import javax.net.ssl.X509TrustManager
 import org.slf4j.LoggerFactory
-import zio.Duration
+import sttp.client4.httpclient.zio.HttpClientZioBackend
+import sttp.client4.httpclient.zio.SttpClient
+import sttp.client4.logging.slf4j.Slf4jLoggingBackend
 import zio.Ref
 import zio.UIO
 import zio.Unsafe
 import zio.ZIO
 import zio.ZLayer
-import zio.http.Client
-import zio.http.ClientSSLConfig
-import zio.http.DnsResolver
-import zio.http.ZClient
-import zio.http.ZClient.Config
-import zio.http.netty.NettyConfig
 
 /**
  * This is the entry point for one Rudder provisioning. It is responsible for
@@ -55,18 +59,6 @@ class RudderResourceModelSource(val configuration: Configuration)
   // last time, in ms, that nodes and groups were update (result of System.getCurrentTimeMillis)
   private val lastUpdateTime = Ref.make(0L).unsafeRun
 
-  private val clientConfig = ZClient.Config.default
-    .connectionTimeout(
-      Duration.fromSeconds(configuration.apiTimeout.seconds)
-    )
-    .ssl(
-      if configuration.checkCertificate then ClientSSLConfig.FromJavaxNetSsl()
-      else ClientSSLConfig.Default
-    )
-
-  // client defaults, see https://github.com/zio/zio-http/issues/2403
-  private val nettyConfig = NettyConfig.defaultWithFastShutdown
-
   /**
    * This is the actual, only integration point with Rundeck. The logic is to
    * cache nodes for some time, to avoid too many request to Rudder (especially
@@ -75,13 +67,26 @@ class RudderResourceModelSource(val configuration: Configuration)
   @throws(classOf[ResourceModelSourceException])
   override def getNodes: INodeSet =
 
+    val backend =
+      if (configuration.checkCertificate)
+        HttpClientZioBackend.layer()
+      else {
+        val ssl = SSLContext.getInstance("TLS")
+        val trustManager = RudderResourceModelSource.DangerAcceptInvalidCerts
+        ssl.init(null, Array(trustManager), new SecureRandom)
+
+        val httpClient = HttpClient.newBuilder().sslContext(ssl).build()
+
+        ZLayer.scoped {
+          HttpClientZioBackend
+            .layerUsingClient(httpClient)
+            .build
+            .map(l => Slf4jLoggingBackend(l.get[SttpClient]))
+        }
+      }
+
     updateNodesAndGroups()
-      .provide(
-        ZLayer.succeed(clientConfig),
-        ZLayer.succeed(nettyConfig),
-        Client.live.orDie,
-        DnsResolver.default
-      )
+      .provideLayer(backend.orDie)
       .unsafeRun
 
   extension [A](self: UIO[A])
@@ -101,9 +106,9 @@ class RudderResourceModelSource(val configuration: Configuration)
     }
 
   /**
-   * Update the local node cache is needed
+   * Update the local node cache if needed
    */
-  private def updateNodesAndGroups(): ZIO[Client, Nothing, INodeSet] =
+  private def updateNodesAndGroups(): ZIO[SttpClient, Nothing, INodeSet] =
 
     for {
       now <- ZIO.clockWith(_.currentTime(TimeUnit.MILLISECONDS))
@@ -125,16 +130,12 @@ class RudderResourceModelSource(val configuration: Configuration)
                 logger.error("Root exception was: ", ex)
               },
           n =>
-            // we only update time here, meaning that each time there is an error,
-            // we will try again next time.
-            // that may lead to funny loop when there is always error and user query quickly the
-            // method, but the user would not understand if he repairs an error on Rudder, and
-            // things don't work immediately.
+            // lastUpdateTime is only updated if the nodes were successfully retrieved.
+            // Hence, if an error occurred, the update will be attempted again on the next call.
             this.lastUpdateTime.set(now)
               *> logger.info(
-                s"Successfully imported Rudder node(s) with id(s) : "
+                s"Successfully imported ${n.size} Rudder node(s) with id(s) : "
                   + n.keys.mkString(", ")
-                  + s"\nSuccessfully imported ${n.size} Rudder node(s)."
               )
               *> this.nodes.set(n.toRundeckNodeSet)
         )
@@ -160,7 +161,7 @@ class RudderResourceModelSource(val configuration: Configuration)
    */
   private def getNodesFromRudder(
       config: Configuration
-  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] =
+  ): ZIO[SttpClient, ErrorMsg, Map[NodeId, NodeEntryImpl]] =
 
     // not sure if it's better to not update at all if I don't get groups (like here)
     // or keep the old groups with new node infos (I think no), or put empty groups (not sure).
@@ -188,6 +189,45 @@ class RudderResourceModelSource(val configuration: Configuration)
 }
 
 object RudderResourceModelSource {
+
+  private val DangerAcceptInvalidCerts: X509TrustManager =
+    new X509ExtendedTrustManager():
+      override def getAcceptedIssuers: Array[X509Certificate] =
+        Array.empty[X509Certificate]
+
+      override def checkServerTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String
+      ): Unit = ()
+
+      override def checkClientTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String
+      ): Unit = ()
+
+      override def checkClientTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String,
+          socket: Socket
+      ): Unit = ()
+
+      override def checkServerTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String,
+          socket: Socket
+      ): Unit = ()
+
+      override def checkClientTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String,
+          sslEngine: SSLEngine
+      ): Unit = ()
+
+      override def checkServerTrusted(
+          x509Certificates: Array[X509Certificate],
+          s: String,
+          sslEngine: SSLEngine
+      ): Unit = ()
 
   def getGroupForNode(
       groups: Seq[Group]

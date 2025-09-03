@@ -19,9 +19,6 @@ package com.normation.rundeck.plugin.resources.rudder
 import zio.*
 import zio.json.*
 import zio.json.ast.Json
-import zio.schema.DeriveSchema
-import zio.schema.Schema
-import zio.schema.derived
 
 /**
  * This file contains data structure definition for our model.
@@ -37,10 +34,7 @@ import zio.schema.derived
 sealed trait ApiVersion { def value: String }
 
 /*
- * If you use latest with Rudder 4.x, you
- * will have a clear error, nothing works => change version.
- * Auto API upgrade are not relevant, since the plugin won't
- * take advantage of them without an update.
+  Supported API versions
  */
 case object ApiLatest extends ApiVersion { val value = "latest" }
 
@@ -64,7 +58,7 @@ final case class RudderUrl(baseUrl: String, version: ApiVersion) {
 
   // node details on Rudder web UI
   def nodeUrl(id: NodeId) =
-    s"""${url}/secure/nodeManager/searchNodes#{"nodeId":"${id}"}"""
+    s"""${url}/secure/nodeManager/node/${id}"""
 }
 
 final case class TimeoutInterval(seconds: Int) {
@@ -100,10 +94,9 @@ opaque type NodeId = String
 object NodeId {
   def apply(string: String): NodeId = string
   given decoder: JsonDecoder[NodeId] = JsonDecoder.string
-  given schema: Schema[NodeId] = Schema.primitive[String]
 }
 
-case class NodeData(nodes: Chunk[Node]) derives JsonDecoder, Schema
+case class NodeData(nodes: Chunk[Node]) derives JsonDecoder
 
 case class Node(
     id: String,
@@ -121,8 +114,7 @@ case class Node(
     networkInterfaces: Option[Chunk[Json]],
     storage: Option[Chunk[Json]],
     fileSystems: Option[Chunk[Json]]
-) derives JsonDecoder,
-      Schema
+) derives JsonDecoder
 
 case class Property(name: String, value: String) derives JsonDecoder
 
@@ -138,28 +130,22 @@ case class RudderNodeResponse(
     action: String,
     result: String,
     data: NodeData
-) derives JsonDecoder,
-      Schema
-
-//notice: for nodes, we directly use rundeck
-//NodeEntryImpl, interfacing is much easier.
+) derives JsonDecoder
 
 // definition of a group, with a type for its id
 opaque type GroupId = String
 object GroupId {
   def apply(string: String): GroupId = string
   given decoder: JsonDecoder[GroupId] = JsonDecoder.string
-  given schema: Schema[GroupId] = Schema.primitive[String]
 }
 
 case class RudderGroupResponse(
     action: String,
     result: String,
     data: GroupData
-) derives JsonDecoder,
-      Schema
+) derives JsonDecoder
 
-case class GroupData(groups: Chunk[Group]) derives JsonDecoder, Schema
+case class GroupData(groups: Chunk[Group]) derives JsonDecoder
 
 final case class Group(
     id: GroupId,
@@ -167,8 +153,7 @@ final case class Group(
     nodeIds: Set[NodeId],
     enabled: Boolean,
     dynamic: Boolean
-) derives JsonDecoder,
-      Schema
+) derives JsonDecoder
 
 //////////////////////////////// Error container ////////////////////////////////
 

@@ -102,7 +102,7 @@ class BuildRundeckNodeTest extends ZIOSpecDefault {
         expected.getAttributes.put("rudder_information:id", "root")
         expected.getAttributes.put(
           "rudder_information:node_direct_url",
-          "http://127.0.0.1:8080/rudder/secure/nodeManager/searchNodes#{\"nodeId\":\"root\"}"
+          "http://127.0.0.1:8080/rudder/secure/nodeManager/node/root"
         )
         expected.getAttributes.put("rudder_information:node_status", "accepted")
         expected.getAttributes.put("total_ram", "2062548992")

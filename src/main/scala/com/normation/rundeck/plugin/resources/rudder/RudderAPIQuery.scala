@@ -18,14 +18,17 @@ package com.normation.rundeck.plugin.resources.rudder
 
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import org.slf4j.LoggerFactory
+import scala.concurrent.duration
+import scala.concurrent.duration.Duration
+import sttp.client4.*
+import sttp.client4.httpclient.zio.SttpClient
+import sttp.client4.httpclient.zio.send
+import sttp.client4.ziojson.*
+import sttp.model.Header
+import sttp.model.QueryParams
 import zio.Chunk
-import zio.Task
 import zio.ZIO
-import zio.http.*
-import zio.http.Method.GET
 import zio.json.ast.Json
-import zio.schema.*
-import zio.schema.codec.JsonCodec.schemaBasedBinaryCodec
 
 /**
  * This file manages the REST query logic. This is where queries to the Rudder
@@ -67,29 +70,21 @@ object RudderAPIQuery {
    */
   def queryNodes(
       config: Configuration
-  ): ZIO[Client, ErrorMsg, Map[NodeId, NodeEntryImpl]] = {
+  ): ZIO[SttpClient, ErrorMsg, Map[NodeId, NodeEntryImpl]] = {
 
-    val queryUrl = config.url.nodesApi
-    val fullUrl =
-      URL.decode(queryUrl + QueryParams(topic -> params).encode).toOption.get
-    val headers = Headers(("X-API-Token" -> config.apiToken))
-    val request = Request(method = GET, url = fullUrl, headers = headers)
+    val request = basicRequest
+      .get(
+        uri"${config.url.nodesApi}"
+          .withParams(QueryParams.fromSeq(Seq((topic, params.mkString(",")))))
+      )
+      .readTimeout(Duration(config.apiTimeout.ms, duration.MILLISECONDS))
+      .headers(Header("X-API-Token", config.apiToken))
+      .contentType("application/json")
+      .response(asJson[RudderNodeResponse])
 
     for {
-      response <- ZClient
-        .batched(request)
-        .mapError(ex =>
-          ErrorMsg(
-            s"Error when trying to get node(s) at url ${fullUrl.encode}: " + ex.getMessage,
-            Some(ex)
-          )
-        )
-
-      body <- response.processApiResponse().toZIO
-      json <- body
-        .to[RudderNodeResponse]
-        .processDecodingError("node")
-
+      response <- request.sendApiRequest("nodes")
+      json <- response.processApiResponse()
       /* At this point, the result can no longer be an error :
         The Rudder nodes that cannot be imported into Rundeck will produce a warning log.
         All the other viable nodes will be imported as normal.
@@ -110,7 +105,6 @@ object RudderAPIQuery {
               )
         )
     } yield map
-
   }
 
   /**
@@ -277,26 +271,21 @@ object RudderAPIQuery {
   /**
    * Query for groups
    */
-  def queryGroups(config: Configuration): ZIO[Client, ErrorMsg, Seq[Group]] = {
+  def queryGroups(
+      config: Configuration
+  ): ZIO[SttpClient, ErrorMsg, Chunk[Group]] = {
 
-    val url = URL.decode(config.url.groupsApi).toOption.get
-    val headers = Headers(("X-API-Token" -> config.apiToken))
-    val request = Request(method = GET, url = url, headers = headers)
+    val request = basicRequest
+      .get(uri"${config.url.groupsApi}")
+      .readTimeout(Duration(config.apiTimeout.ms, duration.MILLISECONDS))
+      .headers(Header("X-API-Token", config.apiToken))
+      .contentType("application/json")
+      .response(asJson[RudderGroupResponse])
 
     for {
-      response <- ZClient
-        .batched(request)
-        .mapError(ex =>
-          ErrorMsg(
-            s"Error when trying to get group(s) at url ${url.encode}: " + ex.getMessage,
-            Some(ex)
-          )
-        )
-      body <- response.processApiResponse().toZIO
-      groups <- body
-        .to[RudderGroupResponse]
-        .processDecodingError("group")
-    } yield groups.data.groups
+      response <- request.sendApiRequest("groups")
+      json <- response.processApiResponse()
+    } yield json.data.groups
   }
 
   extension (self: Json)
@@ -319,26 +308,29 @@ object RudderAPIQuery {
             self.exception
           )
 
-  extension (self: Response)
-    private def processApiResponse(): Either[ErrorMsg, Body] =
-      self.status match
-        case success: Status.Success => Right(self.body)
-        case error: Status.Error     =>
-          Left(ErrorMsg(s"Error ${error.code} : ${error.reasonPhrase}"))
-        case status: Status          =>
-          val errMsg =
-            s"Unsupported response status code : ${status.code} ; details : ${status.reasonPhrase}"
-          Left(ErrorMsg(errMsg))
-
-  extension [A](self: Task[A])
-    private def processDecodingError(
+  extension [A](request: Request[Either[ResponseException[String], A]])
+    private def sendApiRequest(
         resourceType: String
-    ): ZIO[Any, ErrorMsg, A] =
-      self.mapError(ex =>
-        ErrorMsg(
-          s"Error during Json decoding of ${resourceType} API query response : "
-            + "the response does not have the expected format",
-          Some(ex)
+    ): ZIO[SttpClient, ErrorMsg, Response[
+      Either[ResponseException[String], A]
+    ]] =
+      for {
+        response <- send(request).mapError(ex =>
+          ErrorMsg(
+            s"Error in response for Rudder API ${resourceType} query",
+            Some(ex)
+          )
         )
-      )
+      } yield response
+
+  extension [A](response: Response[Either[ResponseException[String], A]])
+    private def processApiResponse(): ZIO[SttpClient, ErrorMsg, A] =
+      for {
+        json <-
+          if (response.isSuccess) {
+            ZIO
+              .fromEither(response.body)
+              .mapError(err => ErrorMsg(err.getMessage))
+          } else ErrorMsg(response.statusText).fail
+      } yield json
 }

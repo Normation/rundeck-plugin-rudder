@@ -16,17 +16,11 @@
 
 package com.normation.rundeck.plugin.resources.rudder
 
-import zio.Duration
+import sttp.client4.httpclient.zio.HttpClientZioBackend
 import zio.Scope
 import zio.ZIO
 import zio.ZIOAppArgs
 import zio.ZIOAppDefault
-import zio.ZLayer
-import zio.http.Client
-import zio.http.ClientSSLConfig
-import zio.http.DnsResolver
-import zio.http.ZClient
-import zio.http.netty.NettyConfig
 
 class RudderAPIQueryIT
 
@@ -44,15 +38,6 @@ object RudderAPIQueryIT extends ZIOAppDefault {
 
   override def run: ZIO[Any & ZIOAppArgs & Scope, Any, Any] =
 
-    val clientConfig = ZClient.Config.default
-      .connectionTimeout(
-        Duration.fromSeconds(5)
-      )
-      .ssl(ClientSSLConfig.FromJavaxNetSsl())
-
-    // client defaults, see https://github.com/zio/zio-http/issues/2403
-    val nettyConfig = NettyConfig.defaultWithFastShutdown
-
     for {
       args <- getArgs
       (apiToken, rudderUrl) <-
@@ -65,21 +50,16 @@ object RudderAPIQueryIT extends ZIOAppDefault {
       config = Configuration(
         url = RudderUrl(rudderUrl, ApiLatest),
         apiToken = apiToken,
-        apiTimeout = TimeoutInterval(0),
+        apiTimeout = TimeoutInterval(5),
         checkCertificate = true,
-        refreshInterval = TimeoutInterval(0),
+        refreshInterval = TimeoutInterval(30),
         sshDefaultPort = 8080,
         envVarSSLPort = None,
         rundeckDefaultUser = "rundeck",
         envVarRundeckUser = None
       )
 
-      _ <- program(config).provide(
-        ZLayer.succeed(clientConfig),
-        ZLayer.succeed(nettyConfig),
-        Client.live.orDie,
-        DnsResolver.default
-      )
+      _ <- program(config).provideLayer(HttpClientZioBackend.layer())
     } yield ()
 
 }
