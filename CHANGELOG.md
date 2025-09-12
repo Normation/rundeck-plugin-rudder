@@ -1,6 +1,13 @@
 Change Log
 ==========
 
+3.1 (2025-09-12)
+----------------
+
+* The ZIO Http client was replaced with sttp
+* As a result of the http client change, the .jar size that is produced by Maven is significantly reduced (now 18.7MB)
+* API requests are now logged ; the new logs can be configured with the SLF4J log level
+
 3.0 (2025-09-01)
 ----------------
 
